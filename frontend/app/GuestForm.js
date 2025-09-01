@@ -144,19 +144,23 @@ export default function GuestForm({ open, onClose, room }) {
               aria-label="Nombre completo"
               required
             />
-            <input
-              type="date"
-              value={guest.birth}
-              onChange={e => handleChange(i, 'birth', e.target.value)}
-              style={{ borderRadius: 6, border: errors[i]?.birth ? '2px solid #DC2626' : '1px solid #ccc', padding: 8, fontSize: 15 }}
-              aria-label="Fecha de nacimiento"
-              required
-            />
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+              <label htmlFor={`birth-${i}`} style={{ fontSize: 13, color: '#111', marginBottom: 2 }}>Fecha de nacimiento</label>
+              <input
+                id={`birth-${i}`}
+                type="date"
+                value={guest.birth}
+                onChange={e => handleChange(i, 'birth', e.target.value)}
+                style={{ borderRadius: 6, border: errors[i]?.birth ? '2px solid #DC2626' : '1px solid #ccc', padding: 8, fontSize: 15 }}
+                aria-label="Fecha de nacimiento"
+                required
+              />
+            </div>
             <span style={{ fontSize: 14, color: '#2563EB', minWidth: 60 }}>
               {guest.age !== null && !isNaN(guest.age) && guest.age >= 0 ? `${guest.age} años` : ''}
             </span>
             {guest.age !== null && guest.age < 18 && guest.age >= 0 && (
-              <span style={{ fontSize: 12, color: '#fff', background: '#2563EB', borderRadius: 6, padding: '2px 8px', marginLeft: 4 }}>¿Menor de 18?</span>
+              <span style={{ fontSize: 12, color: '#fff', background: '#2563EB', borderRadius: 6, padding: '2px 8px', marginLeft: 4 }}>Menor de 18</span>
             )}
           </div>
           {touched[i]?.name && errors[i]?.name && (

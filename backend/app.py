@@ -4,9 +4,41 @@ import re
 from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import random
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 
 app = Flask(__name__)
 CORS(app)
+
+# ...existing code...
+
+# Endpoint para listar habitaciones de un hotel con estado simulado
+@app.route('/api/hotels/<hotel_name>/rooms', methods=['GET'])
+def list_hotel_rooms(hotel_name):
+    checkin = request.args.get('checkin', '')
+    checkout = request.args.get('checkout', '')
+    d_checkin = parse_date(checkin)
+    d_checkout = parse_date(checkout)
+    hotel = next((h for h in hotels if h['name'].lower() == hotel_name.lower()), None)
+    if not hotel:
+        return jsonify({'error': 'Hotel no encontrado'}), 404
+    rooms = []
+    for room in hotel['rooms']:
+        # Simular estado: 80% disponible, 20% ocupado
+        estado = 'disponible' if random.random() < 0.8 else 'ocupado'
+        rooms.append({
+            'nombre': f"{hotel['name']} {room['type']}",
+            'tipo': room['type'],
+            'capacidad': room['capacity'],
+            'precio_por_noche': room['price'],
+            'estado': estado
+        })
+    # Si hay fechas, solo mostrar disponibles
+    if d_checkin and d_checkout:
+        rooms = [r for r in rooms if r['estado'] == 'disponible']
+    return jsonify(rooms)
+
 
 def generate_confirmation_code(length=8):
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
@@ -21,8 +53,10 @@ def classify_guest(age):
         return "Bebé"
     return "Desconocido"
 
-@app.route('/api/reservations', methods=['POST'])
+@app.route('/api/reservations', methods=['POST', 'OPTIONS'])
 def make_reservation():
+    if request.method == 'OPTIONS':
+        return jsonify({}), 200
     data = request.json
     errors = []
     # Validar datos mínimos
@@ -54,6 +88,7 @@ def make_reservation():
                 errors.append(f"Fecha de nacimiento inválida para huésped {i+1}.")
     if errors:
         return jsonify({"errors": errors}), 400
+
 
     # Al menos un adulto
     if not any(g['type'] == 'Adulto' for g in guests):
@@ -101,37 +136,17 @@ def make_reservation():
     # Generar código de confirmación
     code = generate_confirmation_code()
 
-    # Respuesta
     return jsonify({
         "confirmation_code": code,
         "hotel": hotel['name'],
         "room_type": room['type'],
         "checkin": data['checkin'],
         "checkout": data['checkout'],
-        "nights": nights,
         "guests": guests,
-        "price_detail": {
-            "subtotal": subtotal,
-            "nights": nights,
-            "adultos": count['Adulto'],
-            "niños": count['Niño'],
-            "bebés": count['Bebé'],
-            "tarifa_adulto": price_adult,
-            "tarifa_niño": price_child,
-            "tarifa_bebé": price_baby,
-            "oferta": offer_name
-        },
-        "total": total
-    })
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-
-import re
-from datetime import datetime
-
-app = Flask(__name__)
-CORS(app)
-
+        "nights": nights,
+        "total": total,
+        "offer": offer_name
+    }), 200
 # Datos simulados de hoteles y habitaciones
 hotels = [
     {

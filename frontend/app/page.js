@@ -2,6 +2,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import GuestForm from "./GuestForm";
+import HotelRoomsList from "./HotelRoomsList";
 
 // Modal simple reutilizable
 function Modal({ open, onClose, children }) {
@@ -131,6 +132,9 @@ export default function Home() {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [selectedHotel, setSelectedHotel] = useState(null);
+  // Modal de habitaciones
+  const [roomsModalOpen, setRoomsModalOpen] = useState(false);
+  const [roomsHotelName, setRoomsHotelName] = useState("");
 
   // Convierte yyyy-mm-dd a dd/mm/yyyy
   const toDDMMYYYY = (dateStr) => {
@@ -427,7 +431,21 @@ export default function Home() {
                     setModalOpen(true);
                   }}
                 >Reservar</button>
-                <button style={{ background: '#fff', color: '#2563EB', border: '1.5px solid #2563EB', borderRadius: 8, padding: '8px 20px', fontWeight: 600, cursor: 'pointer', fontSize: 15 }}>Ver</button>
+                <button
+                  style={{ background: '#fff', color: '#2563EB', border: '1.5px solid #2563EB', borderRadius: 8, padding: '8px 20px', fontWeight: 600, cursor: 'pointer', fontSize: 15 }}
+                  onClick={() => {
+                    setRoomsHotelName(hotel.hotel);
+                    setRoomsModalOpen(true);
+                  }}
+                >Ver</button>
+      {/* Modal de listado de habitaciones */}
+      <HotelRoomsList
+        hotelName={roomsHotelName}
+        checkin={form.checkin}
+        checkout={form.checkout}
+        open={roomsModalOpen}
+        onClose={() => setRoomsModalOpen(false)}
+      />
               </div>
             </div>
           ))}
