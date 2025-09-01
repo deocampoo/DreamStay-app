@@ -1,6 +1,23 @@
 
 "use client";
 import { useState, useEffect } from "react";
+import GuestForm from "./GuestForm";
+
+// Modal simple reutilizable
+function Modal({ open, onClose, children }) {
+  if (!open) return null;
+  return (
+    <div style={{
+      position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+      background: 'rgba(0,0,0,0.25)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center'
+    }}>
+      <div style={{ background: '#fff', borderRadius: 16, padding: 40, minWidth: 420, maxWidth: 600, boxShadow: '0 4px 24px #0002', position: 'relative' }}>
+        <button onClick={onClose} style={{ position: 'absolute', top: 16, right: 20, background: 'none', border: 'none', fontSize: 26, color: '#64748b', cursor: 'pointer' }} aria-label="Cerrar">×</button>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 const CITIES = ["Buenos Aires", "Mar del Plata"];
 const ROOM_TYPES = [
@@ -109,6 +126,11 @@ export default function Home() {
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState("");
+
+  // Modal de reserva
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedRoom, setSelectedRoom] = useState(null);
+  const [selectedHotel, setSelectedHotel] = useState(null);
 
   // Convierte yyyy-mm-dd a dd/mm/yyyy
   const toDDMMYYYY = (dateStr) => {
@@ -397,13 +419,53 @@ export default function Home() {
                 </div>
               ))}
               <div style={{ marginTop: 'auto', display: 'flex', gap: 8 }}>
-                <button style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 20px', fontWeight: 600, cursor: 'pointer', fontSize: 15 }}>Reservar</button>
+                <button
+                  style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 20px', fontWeight: 600, cursor: 'pointer', fontSize: 15 }}
+                  onClick={() => {
+                    setSelectedRoom(hotel.rooms[0]);
+                    setSelectedHotel(hotel);
+                    setModalOpen(true);
+                  }}
+                >Reservar</button>
                 <button style={{ background: '#fff', color: '#2563EB', border: '1.5px solid #2563EB', borderRadius: 8, padding: '8px 20px', fontWeight: 600, cursor: 'pointer', fontSize: 15 }}>Ver</button>
               </div>
             </div>
           ))}
         </div>
       )}
+      {/* Modal de reserva de huéspedes */}
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)}>
+        <div style={{ fontWeight: 600, fontSize: 20, marginBottom: 16 }}>Reserva de habitación</div>
+        {selectedHotel && selectedRoom && (
+          <div style={{ marginBottom: 16 }}>
+            <div><b>Hotel:</b> {selectedHotel.hotel}</div>
+            <div><b>Habitación:</b> {selectedRoom.type}</div>
+            <div><b>Precio total:</b> ${selectedRoom.price}</div>
+            <div><b>Precio por noche:</b> ${selectedRoom.price_per_night.toFixed(2)}</div>
+          </div>
+        )}
+        <GuestForm 
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          room={{
+            ...selectedRoom,
+            hotel: selectedHotel?.hotel || selectedHotel?.name,
+            checkin: form.checkin,
+            checkout: form.checkout,
+            guestsCount: {
+              adults: form.adults,
+              children: form.children,
+              babies: form.babies
+            }
+          }}
+        />
+      </Modal>
+
+
+
+
+
+
 
       {/* Sin resultados */}
       {results && Array.isArray(results) && results.length === 0 && !apiError && !loading && (
