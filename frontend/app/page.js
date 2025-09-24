@@ -1,6 +1,8 @@
 
 "use client";
 import { useState, useEffect } from "react";
+import GuestFormModal from "./GuestFormModal";
+import ReceptionPanel from "./ReceptionPanel";
 
 const CITIES = ["Buenos Aires", "Mar del Plata"];
 const ROOM_TYPES = [
@@ -25,12 +27,22 @@ function validateForm(form) {
   // Fechas
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const checkin = form.checkin ? new Date(form.checkin) : null;
+  let checkin = null;
+  if (form.checkin) {
+    // Solo acepta formato YYYY-MM-DD
+    checkin = new Date(form.checkin);
+    console.log('Check-in:', form.checkin, '| Hoy:', today.toISOString().slice(0,10));
+  }
   const checkout = form.checkout ? new Date(form.checkout) : null;
   if (!checkin) {
     errors.checkin = "La fecha de entrada es obligatoria.";
-  } else if (checkin < today) {
-    errors.checkin = "La fecha de entrada no puede ser menor a la actual.";
+  } else {
+    // Comparar solo año, mes y día
+    const checkinYMD = `${checkin.getFullYear()}-${(checkin.getMonth()+1).toString().padStart(2,'0')}-${checkin.getDate().toString().padStart(2,'0')}`;
+    const todayYMD = `${today.getFullYear()}-${(today.getMonth()+1).toString().padStart(2,'0')}-${today.getDate().toString().padStart(2,'0')}`;
+    if (checkinYMD < todayYMD) {
+      errors.checkin = "La fecha de entrada no puede ser menor a la actual.";
+    }
   }
   if (!checkout) {
     errors.checkout = "La fecha de salida es obligatoria.";
@@ -76,6 +88,13 @@ export default function Home() {
   const [touched, setTouched] = useState({});
   const [errors, setErrors] = useState({});
 
+  // Estado para modal de reserva y selección
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedHotel, setSelectedHotel] = useState(null);
+  const [selectedRoom, setSelectedRoom] = useState(null);
+  const [roomsModalOpen, setRoomsModalOpen] = useState(false);
+  const [roomsHotelName, setRoomsHotelName] = useState("");
+
   // Autocomplete ciudades
   const [citySuggestions, setCitySuggestions] = useState([]);
   const handleCityChange = (e) => {
@@ -91,7 +110,21 @@ export default function Home() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    let normalizedValue = value;
+    if (name === "checkin" || name === "checkout") {
+      // Si el valor es MM/DD/YYYY o DD/MM/YYYY, normaliza a YYYY-MM-DD
+      const parts = value.split(/[\/\-]/);
+      if (parts.length === 3) {
+        if (parts[0].length === 4) {
+          normalizedValue = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+        } else if (parseInt(parts[0]) > 12) {
+          normalizedValue = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+        } else {
+          normalizedValue = `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
+        }
+      }
+    }
+    setForm((prev) => ({ ...prev, [name]: normalizedValue }));
     setTouched((prev) => ({ ...prev, [name]: true }));
   };
   const handleIntChange = (e) => {
@@ -157,11 +190,12 @@ export default function Home() {
 
   // Layout y barra de búsqueda + resultados
   return (
-  <div style={{ maxWidth: 900, margin: "2rem auto", padding: 24, fontFamily: 'Inter, system-ui, sans-serif', background: '#fff', minHeight: '100vh', color: '#111' }}>
+    <div style={{ maxWidth: 900, margin: "2rem auto", padding: 24, fontFamily: 'Inter, system-ui, sans-serif', background: '#fff', minHeight: '100vh', color: '#111' }}>
       <nav style={{ marginBottom: 16, color: '#6b7280', fontSize: 14 }} aria-label="breadcrumb">
         Home &gt; Search results
       </nav>
-  <h1 style={{ fontWeight: 600, fontSize: 28, marginBottom: 24, color: '#111' }}>Búsqueda de hoteles</h1>
+      <h1 style={{ fontWeight: 600, fontSize: 28, marginBottom: 24, color: '#111' }}>Búsqueda de hoteles</h1>
+      <ReceptionPanel />
       <form
         style={{
           display: "flex",
@@ -252,20 +286,18 @@ export default function Home() {
             value={form.room_type}
             onChange={handleChange}
             aria-label="Tipo de habitación"
-            aria-invalid={!!errors.room_type}
-            aria-describedby="roomtype-error"
             style={{ width: "100%", borderRadius: 8, border: errors.room_type ? '2px solid #DC2626' : '1px solid #ccc', padding: 8, marginTop: 4, color: '#111', background: '#fff' }}
             required
           >
-            {ROOM_TYPES.map((rt) => (
+            {ROOM_TYPES.map(rt => (
               <option key={rt.value} value={rt.value}>{rt.label}</option>
             ))}
           </select>
           {touched.room_type && errors.room_type && (
-            <div id="roomtype-error" style={{ color: "#DC2626", fontSize: 13 }} aria-live="polite">{errors.room_type}</div>
+            <div style={{ color: "#DC2626", fontSize: 13 }} aria-live="polite">{errors.room_type}</div>
           )}
         </div>
-        {/* Guests */}
+          {/* ...existing code... */}
         <div style={{ minWidth: 180, display: 'flex', gap: 8, flexDirection: 'column' }}>
           <label style={{ fontWeight: 500 }}>Huéspedes</label>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -394,12 +426,49 @@ export default function Home() {
                   <span style={{ fontWeight: 500, color: '#111' }}>Precio total: </span>${room.price} <span style={{ color: '#64748b', fontSize: 13 }}>/ {room.type}</span><br />
                   <span style={{ fontWeight: 500, color: '#111' }}>Precio por noche: </span>${room.price_per_night.toFixed(2)}<br />
                   {room.offer && <span style={{ background: '#16A34A', color: '#fff', borderRadius: 8, padding: '2px 8px', fontSize: 12, marginLeft: 4 }}>Oferta: {room.offer}</span>}
+                  <div style={{ marginTop: '8px', display: 'flex', gap: 8 }}>
+                    <button
+                      style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 20px', fontWeight: 600, cursor: 'pointer', fontSize: 15 }}
+                      onClick={() => {
+                        setSelectedHotel(hotel);
+                        setSelectedRoom(room);
+                        setModalOpen(true);
+                      }}
+                    >Reservar</button>
+                    <button
+                      style={{ background: '#fff', color: '#2563EB', border: '1.5px solid #2563EB', borderRadius: 8, padding: '8px 20px', fontWeight: 600, cursor: 'pointer', fontSize: 15 }}
+                      onClick={() => {
+                        setRoomsHotelName(hotel.hotel);
+                        setRoomsModalOpen(true);
+                      }}
+                    >Ver</button>
+                  </div>
                 </div>
               ))}
-              <div style={{ marginTop: 'auto', display: 'flex', gap: 8 }}>
-                <button style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 20px', fontWeight: 600, cursor: 'pointer', fontSize: 15 }}>Reservar</button>
-                <button style={{ background: '#fff', color: '#2563EB', border: '1.5px solid #2563EB', borderRadius: 8, padding: '8px 20px', fontWeight: 600, cursor: 'pointer', fontSize: 15 }}>Ver</button>
-              </div>
+  // ...existing code...
+  // Modal de reserva de huéspedes
+  {modalOpen && selectedHotel && selectedRoom && (
+    <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.25)', zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: '#fff', borderRadius: 16, padding: 32, minWidth: 420, maxWidth: 600, boxShadow: '0 4px 24px #0002', position: 'relative' }}>
+        <button onClick={() => setModalOpen(false)} style={{ position: 'absolute', top: 16, right: 20, background: 'none', border: 'none', fontSize: 26, color: '#64748b', cursor: 'pointer' }} aria-label="Cerrar">×</button>
+        <div style={{ fontWeight: 600, fontSize: 22, marginBottom: 18 }}>Reserva de habitación</div>
+        <div style={{ marginBottom: 16 }}>
+          <div><b>Hotel:</b> {selectedHotel.hotel}</div>
+          <div><b>Habitación:</b> {selectedRoom.type}</div>
+          <div><b>Precio total:</b> ${selectedRoom.price}</div>
+          <div><b>Precio por noche:</b> ${selectedRoom.price_per_night.toFixed(2)}</div>
+        </div>
+        {/* Formulario de huéspedes y confirmación de reserva */}
+        <GuestFormModal 
+          hotel={selectedHotel}
+          room={selectedRoom}
+          checkin={form.checkin}
+          checkout={form.checkout}
+          onClose={() => setModalOpen(false)}
+        />
+      </div>
+    </div>
+  )}
             </div>
           ))}
         </div>

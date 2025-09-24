@@ -7,6 +7,126 @@ from datetime import datetime
 app = Flask(__name__)
 CORS(app)
 
+# --- Estructuras para reservas, ocupación y estadías ---
+reservations = []  # reservas confirmadas
+room_status = {}   # estado de habitaciones: {(hotel, room_type): 'Disponible'/'Ocupada'}
+estadias = []      # historial de estadías
+
+# --- Endpoint para registrar reservas (actualiza reservas y estado) ---
+
+# --- Endpoint para check-in ---
+@app.route('/api/checkin', methods=['POST'])
+def checkin():
+    data = request.json
+    code = data.get('confirmation_code')
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    # Buscar reserva
+    res = next((r for r in reservations if r['confirmation_code'] == code), None)
+    if not res:
+        return jsonify({'error': 'No se puede realizar el check-in sin una reserva confirmada'}), 400
+    # Validar fecha
+    d_checkin = parse_date(res['checkin'])
+    d_now = datetime.now()
+    if d_now < d_checkin:
+        return jsonify({'error': 'La fecha de check-in no puede ser anterior a la reservada'}), 400
+    # Estado de habitación
+    key = (res['hotel'], res['room_type'])
+    if room_status.get(key) == 'Ocupada':
+        return jsonify({'error': 'La habitación ya está ocupada'}), 400
+    room_status[key] = 'Ocupada'
+    res['status'] = 'ocupada'
+    res['checkin_real'] = now
+    return jsonify({'message': 'Check-in realizado', 'checkin': now, 'hotel': res['hotel'], 'room_type': res['room_type']})
+
+# --- Endpoint para check-out ---
+@app.route('/api/checkout', methods=['POST'])
+def checkout():
+    data = request.json
+    code = data.get('confirmation_code')
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    # Buscar reserva
+    res = next((r for r in reservations if r['confirmation_code'] == code), None)
+    if not res or res.get('status') != 'ocupada':
+        return jsonify({'error': 'La habitación no se encuentra ocupada, no se puede realizar el check-out'}), 400
+    # Validar fecha
+    d_checkin_real = datetime.strptime(res['checkin_real'], '%Y-%m-%d %H:%M:%S')
+    d_now = datetime.now()
+    if d_now < d_checkin_real:
+        return jsonify({'error': 'La fecha de check-out no puede ser anterior al check-in'}), 400
+    # Estado de habitación
+    key = (res['hotel'], res['room_type'])
+    room_status[key] = 'Disponible'
+    res['status'] = 'completada'
+    res['checkout_real'] = now
+    # Registrar estadía
+    estadia = {
+        'guests': res['guests'],
+        'hotel': res['hotel'],
+        'room_type': res['room_type'],
+        'checkin': res['checkin_real'],
+        'checkout': now,
+        'total': res['total']
+    }
+    estadias.append(estadia)
+    return jsonify({'message': 'Check-out realizado', 'checkout': now, 'hotel': res['hotel'], 'room_type': res['room_type']})
+
+# --- Endpoint para consultar historial de estadías ---
+@app.route('/api/estadias', methods=['GET'])
+def get_estadias():
+    return jsonify(estadias)
+
+# Endpoint de reservas
+@app.route('/api/reservations', methods=['POST'])
+def make_reservation():
+    data = request.json
+    # Validación básica
+    required_fields = ['hotel', 'room_type', 'checkin', 'checkout', 'guests']
+    for field in required_fields:
+        if field not in data:
+            return jsonify({'error': f'Falta el campo {field}'}), 400
+    if not isinstance(data['guests'], list) or len(data['guests']) == 0:
+        return jsonify({'error': 'Debe haber al menos un huésped'}), 400
+    # Simular código de confirmación
+    import random, string
+    code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+    # Calcular precio total (simulación básica)
+    price = 0
+    # Buscar hotel y tipo de habitación
+    for h in hotels:
+        if h['name'] == data['hotel']:
+            for r in h['rooms']:
+                if r['type'] == data['room_type']:
+                    price = r['price']
+    nights = 1
+    try:
+        d_checkin = parse_date(data['checkin'])
+        d_checkout = parse_date(data['checkout'])
+        nights = (d_checkout - d_checkin).days
+    except:
+        pass
+    total = price * nights
+    reservation = {
+        'confirmation_code': code,
+        'hotel': data['hotel'],
+        'room_type': data['room_type'],
+        'checkin': data['checkin'],
+        'checkout': data['checkout'],
+        'guests': data['guests'],
+        'total': total,
+        'status': 'confirmada'
+    }
+    reservations.append(reservation)
+    return jsonify({
+        'message': 'Reserva confirmada',
+        'confirmation_code': code,
+        'hotel': data['hotel'],
+        'room_type': data['room_type'],
+        'checkin': data['checkin'],
+        'checkout': data['checkout'],
+        'guests': data['guests'],
+        'total': total
+    })
+
 # Datos simulados de hoteles y habitaciones
 hotels = [
     {
