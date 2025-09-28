@@ -1,59 +1,87 @@
-
-"use client";
-import { useState, useEffect } from "react";
+﻿"use client";
+import React, { useState, useEffect, useMemo } from "react";
 import GuestFormModal from "./GuestFormModal";
 import ReceptionPanel from "./ReceptionPanel";
 
 const CITIES = ["Buenos Aires", "Mar del Plata"];
+
 const ROOM_TYPES = [
   { value: "Single", label: "Single" },
   { value: "Doble", label: "Doble" },
   { value: "Suite", label: "Suite" },
+  { value: "Todos", label: "Todas" },
 ];
+
 const CAPACITY = {
   Single: { adults: 1, children: 0, babies: 0 },
   Doble: { adults: 2, children: 1, babies: 0 },
   Suite: { adults: 3, children: 2, babies: 1 },
 };
 
-function validateForm(form) {
-  const errors = {};
-  // Ciudad
-  if (!form.city.trim()) {
-    errors.city = "La ciudad es obligatoria.";
-  } else if (!/^[a-zA-ZáéíóúÁÉÍÓÚüÜñÑ ]+$/.test(form.city)) {
-    errors.city = "La ciudad solo admite letras y espacios.";
-  }
-  // Fechas
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  let checkin = null;
-  if (form.checkin) {
-    // Solo acepta formato YYYY-MM-DD
-    checkin = new Date(form.checkin);
-    console.log('Check-in:', form.checkin, '| Hoy:', today.toISOString().slice(0,10));
-  }
-  const checkout = form.checkout ? new Date(form.checkout) : null;
-  if (!checkin) {
-    errors.checkin = "La fecha de entrada es obligatoria.";
-  } else {
-    // Comparar solo año, mes y día
-    const checkinYMD = `${checkin.getFullYear()}-${(checkin.getMonth()+1).toString().padStart(2,'0')}-${checkin.getDate().toString().padStart(2,'0')}`;
-    const todayYMD = `${today.getFullYear()}-${(today.getMonth()+1).toString().padStart(2,'0')}-${today.getDate().toString().padStart(2,'0')}`;
-    if (checkinYMD < todayYMD) {
-      errors.checkin = "La fecha de entrada no puede ser menor a la actual.";
+const INITIAL_FILTERS = { offerOnly: false, maxPrice: "" };
+
+function parseISO(dateStr) {
+  if (!dateStr) return null;
+  const isoParts = dateStr.split("-");
+  if (isoParts.length === 3) {
+    const [year, month, day] = isoParts.map((part) => parseInt(part, 10));
+    if (!Number.isNaN(year) && !Number.isNaN(month) && !Number.isNaN(day)) {
+      return new Date(year, month - 1, day);
     }
   }
-  if (!checkout) {
+  const slashParts = dateStr.split("/");
+  if (slashParts.length === 3) {
+    const [a, b, c] = slashParts.map((part) => parseInt(part, 10));
+    if (!Number.isNaN(a) && !Number.isNaN(b) && !Number.isNaN(c)) {
+      if (c > 31) {
+        return new Date(c, a - 1, b);
+      }
+      if (a > 31) {
+        return new Date(a, b - 1, c);
+      }
+      return new Date(c, b - 1, a);
+    }
+  }
+  return null;
+}
+
+function formatCurrency(value) {
+  if (typeof value !== "number" || Number.isNaN(value)) return value;
+  return value.toLocaleString("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2 });
+}
+
+function calculateNights(checkin, checkout) {
+  const start = parseISO(checkin);
+  const end = parseISO(checkout);
+  if (!start || !end) return 1;
+  const diff = Math.floor((end - start) / (1000 * 60 * 60 * 24));
+  return diff > 0 ? diff : 1;
+}
+
+function validateForm(form) {
+  const errors = {};
+  if (!form.city.trim()) {
+    errors.city = "La ciudad es obligatoria.";
+  } else if (!/^[A-Za-z0-9 ]+$/.test(form.city)) {
+    errors.city = "La ciudad solo admite caracteres alfanumericos y espacios.";
+  }
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const checkinDate = parseISO(form.checkin);
+  const checkoutDate = parseISO(form.checkout);
+  if (!checkinDate) {
+    errors.checkin = "La fecha de entrada es obligatoria.";
+  } else if (checkinDate < today) {
+    errors.checkin = "La fecha de entrada no puede ser menor a la actual.";
+  }
+  if (!checkoutDate) {
     errors.checkout = "La fecha de salida es obligatoria.";
-  } else if (checkin && checkout <= checkin) {
+  } else if (checkinDate && checkoutDate <= checkinDate) {
     errors.checkout = "La fecha de salida debe ser posterior a la de entrada.";
   }
-  // Tipo de habitación
   if (!form.room_type) {
     errors.room_type = "El tipo de habitación es obligatorio.";
   }
-  // Huéspedes
   if (form.adults < 1) {
     errors.adults = "Debe haber al menos un adulto en la reserva.";
   }
@@ -63,14 +91,13 @@ function validateForm(form) {
   if (form.babies < 0) {
     errors.babies = "No se permiten valores negativos.";
   }
-  // Capacidad
-  const cap = CAPACITY[form.room_type] || CAPACITY.Single;
-  if (
-    form.adults > cap.adults ||
-    form.children > cap.children ||
-    form.babies > cap.babies
-  ) {
-    errors.capacity = "La cantidad de huéspedes excede la capacidad de la habitación seleccionada.";
+  if (form.room_type !== "Todos") {
+    const cap = CAPACITY[form.room_type];
+    if (cap) {
+      if (form.adults > cap.adults || form.children > cap.children || form.babies > cap.babies) {
+        errors.capacity = "La cantidad de huéspedes excede la capacidad de la habitación seleccionada.";
+      }
+    }
   }
   return errors;
 }
@@ -87,18 +114,21 @@ export default function Home() {
   });
   const [touched, setTouched] = useState({});
   const [errors, setErrors] = useState({});
+  const [results, setResults] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [apiError, setApiError] = useState("");
+  const [filters, setFilters] = useState(INITIAL_FILTERS);
 
-  // Estado para modal de reserva y selección
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedHotel, setSelectedHotel] = useState(null);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [roomsModalOpen, setRoomsModalOpen] = useState(false);
   const [roomsHotelName, setRoomsHotelName] = useState("");
 
-  // Autocomplete ciudades
   const [citySuggestions, setCitySuggestions] = useState([]);
-  const handleCityChange = (e) => {
-    const value = e.target.value;
+
+  const handleCityChange = (event) => {
+    const value = event.target.value;
     setForm((prev) => ({ ...prev, city: value }));
     setTouched((prev) => ({ ...prev, city: true }));
     if (value.length > 0) {
@@ -108,112 +138,118 @@ export default function Home() {
     }
   };
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    let normalizedValue = value;
-    if (name === "checkin" || name === "checkout") {
-      // Si el valor es MM/DD/YYYY o DD/MM/YYYY, normaliza a YYYY-MM-DD
-      const parts = value.split(/[\/\-]/);
-      if (parts.length === 3) {
-        if (parts[0].length === 4) {
-          normalizedValue = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
-        } else if (parseInt(parts[0]) > 12) {
-          normalizedValue = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-        } else {
-          normalizedValue = `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
-        }
-      }
-    }
-    setForm((prev) => ({ ...prev, [name]: normalizedValue }));
-    setTouched((prev) => ({ ...prev, [name]: true }));
-  };
-  const handleIntChange = (e) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: Math.max(0, parseInt(value) || 0) }));
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
     setTouched((prev) => ({ ...prev, [name]: true }));
   };
 
-  // Validación en tiempo real
+  const handleIntChange = (event) => {
+    const { name, value } = event.target;
+    setForm((prev) => ({ ...prev, [name]: Math.max(0, parseInt(value, 10) || 0) }));
+    setTouched((prev) => ({ ...prev, [name]: true }));
+  };
+
   useEffect(() => {
     setErrors(validateForm(form));
   }, [form]);
 
-  // Estado de resultados
-  const [results, setResults] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [apiError, setApiError] = useState("");
+  const nights = useMemo(() => calculateNights(form.checkin, form.checkout), [form.checkin, form.checkout]);
 
-  // Convierte yyyy-mm-dd a dd/mm/yyyy
-  const toDDMMYYYY = (dateStr) => {
-    if (!dateStr) return "";
-    const [y, m, d] = dateStr.split("-");
-    return `${d}/${m}/${y}`;
-  };
-  // Convierte a ISO yyyy-mm-dd
-  const toISO = (dateStr) => dateStr;
-
-  // Enviar búsqueda
-  const handleSearch = async (e) => {
-    e.preventDefault();
+  const handleSearch = async (event) => {
+    event.preventDefault();
     setTouched({ city: true, checkin: true, checkout: true, room_type: true, adults: true, children: true, babies: true });
-    const errs = validateForm(form);
-    setErrors(errs);
-    if (Object.keys(errs).length > 0) return;
+    const currentErrors = validateForm(form);
+    setErrors(currentErrors);
+    if (Object.keys(currentErrors).length > 0) {
+      return;
+    }
     setLoading(true);
     setApiError("");
     setResults(null);
+    setFilters(INITIAL_FILTERS);
+    setFilterTouched(false);
     try {
       const params = new URLSearchParams({
         city: form.city,
-        from: toISO(form.checkin),
-        to: toISO(form.checkout),
+        from: form.checkin,
+        to: form.checkout,
         roomType: form.room_type,
         adults: form.adults,
         children: form.children,
         babies: form.babies,
       });
-      // Cambia la URL a tu endpoint real si es necesario
-      const res = await fetch(`http://localhost:5000/api/hotels/search?${params.toString()}`);
-      const data = await res.json();
-      if (!res.ok) {
+      const response = await fetch(`http://localhost:5000/api/hotels/search?${params.toString()}`);
+      const data = await response.json();
+      if (!response.ok) {
         setApiError(data.errors ? data.errors.join(". ") : data.message || "Error de búsqueda");
         setResults([]);
       } else {
         setResults(data);
       }
-    } catch (err) {
+    } catch (error) {
       setApiError("Error de conexión con el backend");
       setResults([]);
     }
     setLoading(false);
   };
 
-  // Layout y barra de búsqueda + resultados
+  const filteredResults = useMemo(() => {
+    if (!Array.isArray(results)) return results;
+    return results
+      .map((hotel) => {
+        let rooms = hotel.rooms || [];
+        if (filters.offerOnly) {
+          rooms = rooms.filter((room) => Boolean(room.offer));
+        }
+        if (filters.maxPrice) {
+          const max = parseFloat(filters.maxPrice);
+          if (!Number.isNaN(max)) {
+            rooms = rooms.filter((room) => room.price_per_night <= max);
+          }
+        }
+        return { ...hotel, rooms };
+      })
+      .filter((hotel) => hotel.rooms.length > 0);
+  }, [results, filters]);
+
+  const showFilteredNoResults = Array.isArray(filteredResults) && filteredResults.length === 0 && !loading && !apiError;
+
+  const [filterTouched, setFilterTouched] = useState(false);
+  const handleOfferToggle = (event) => {
+    const { checked } = event.target;
+    setFilters((prev) => ({ ...prev, offerOnly: checked }));
+    setFilterTouched(true);
+  };
+  const handleMaxPriceChange = (event) => {
+    setFilters((prev) => ({ ...prev, maxPrice: event.target.value }));
+    setFilterTouched(true);
+  };
+
   return (
-    <div style={{ maxWidth: 900, margin: "2rem auto", padding: 24, fontFamily: 'Inter, system-ui, sans-serif', background: '#fff', minHeight: '100vh', color: '#111' }}>
+    <div style={{ maxWidth: 1180, margin: "2rem auto", padding: 24, fontFamily: 'Inter, system-ui, sans-serif', background: '#fff', minHeight: '100vh', color: '#111' }}>
       <nav style={{ marginBottom: 16, color: '#6b7280', fontSize: 14 }} aria-label="breadcrumb">
         Home &gt; Search results
       </nav>
       <h1 style={{ fontWeight: 600, fontSize: 28, marginBottom: 24, color: '#111' }}>Búsqueda de hoteles</h1>
-      <ReceptionPanel />
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.75fr) minmax(280px, 1fr)', gap: 24, alignItems: 'start', marginTop: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+
       <form
         style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 16,
-          background: "#fff",
-          borderRadius: 16,
-          boxShadow: "none",
-          border: '2px solid #111',
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: "16px 20px",
+          background: "#f8fafc",
+          borderRadius: 20,
+          border: "1px solid #e2e8f0",
           padding: 24,
-          alignItems: "end",
-          marginBottom: 32,
+          boxShadow: "0 18px 40px rgba(15, 23, 42, 0.08)"
         }}
         autoComplete="off"
         onSubmit={handleSearch}
         aria-label="Hotel search form"
       >
-        {/* Ciudad */}
         <div style={{ flex: 1, minWidth: 180 }}>
           <label htmlFor="city" style={{ fontWeight: 500 }}>Destino</label>
           <input
@@ -239,7 +275,6 @@ export default function Home() {
             <div id="city-error" style={{ color: "#DC2626", fontSize: 13 }} aria-live="polite">{errors.city}</div>
           )}
         </div>
-        {/* Check-in */}
         <div style={{ minWidth: 160 }}>
           <label htmlFor="checkin" style={{ fontWeight: 500 }}>Check-in</label>
           <input
@@ -258,7 +293,6 @@ export default function Home() {
             <div id="checkin-error" style={{ color: "#DC2626", fontSize: 13 }} aria-live="polite">{errors.checkin}</div>
           )}
         </div>
-        {/* Check-out */}
         <div style={{ minWidth: 160 }}>
           <label htmlFor="checkout" style={{ fontWeight: 500 }}>Check-out</label>
           <input
@@ -277,8 +311,7 @@ export default function Home() {
             <div id="checkout-error" style={{ color: "#DC2626", fontSize: 13 }} aria-live="polite">{errors.checkout}</div>
           )}
         </div>
-        {/* Room type */}
-        <div style={{ minWidth: 120 }}>
+        <div style={{ minWidth: 150 }}>
           <label htmlFor="room_type" style={{ fontWeight: 500 }}>Tipo de habitación</label>
           <select
             id="room_type"
@@ -289,15 +322,14 @@ export default function Home() {
             style={{ width: "100%", borderRadius: 8, border: errors.room_type ? '2px solid #DC2626' : '1px solid #ccc', padding: 8, marginTop: 4, color: '#111', background: '#fff' }}
             required
           >
-            {ROOM_TYPES.map(rt => (
-              <option key={rt.value} value={rt.value}>{rt.label}</option>
+            {ROOM_TYPES.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
           {touched.room_type && errors.room_type && (
             <div style={{ color: "#DC2626", fontSize: 13 }} aria-live="polite">{errors.room_type}</div>
           )}
         </div>
-          {/* ...existing code... */}
         <div style={{ minWidth: 180, display: 'flex', gap: 8, flexDirection: 'column' }}>
           <label style={{ fontWeight: 500 }}>Huéspedes</label>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -310,10 +342,10 @@ export default function Home() {
                 onChange={handleIntChange}
                 aria-label="Adultos"
                 aria-invalid={!!errors.adults}
-                style={{ width: 48, borderRadius: 8, border: errors.adults ? '2px solid #DC2626' : '1px solid #ccc', padding: 8, color: '#111', background: '#fff' }}
+                style={{ width: 58, borderRadius: 8, border: errors.adults ? '2px solid #DC2626' : '1px solid #ccc', padding: 8, color: '#111', background: '#fff' }}
                 required
               />
-              <span style={{ fontSize: 13, marginLeft: 2 }}>Adultos</span>
+              <span style={{ fontSize: 13, marginLeft: 4 }}>Adultos</span>
             </div>
             <div>
               <input
@@ -324,10 +356,10 @@ export default function Home() {
                 onChange={handleIntChange}
                 aria-label="Niños"
                 aria-invalid={!!errors.children}
-                style={{ width: 48, borderRadius: 8, border: errors.children ? '2px solid #DC2626' : '1px solid #ccc', padding: 8, color: '#111', background: '#fff' }}
+                style={{ width: 58, borderRadius: 8, border: errors.children ? '2px solid #DC2626' : '1px solid #ccc', padding: 8, color: '#111', background: '#fff' }}
                 required
               />
-              <span style={{ fontSize: 13, marginLeft: 2 }}>Niños</span>
+              <span style={{ fontSize: 13, marginLeft: 4 }}>Niños</span>
             </div>
             <div>
               <input
@@ -338,10 +370,10 @@ export default function Home() {
                 onChange={handleIntChange}
                 aria-label="Bebés"
                 aria-invalid={!!errors.babies}
-                style={{ width: 48, borderRadius: 8, border: errors.babies ? '2px solid #DC2626' : '1px solid #ccc', padding: 8, color: '#111', background: '#fff' }}
+                style={{ width: 58, borderRadius: 8, border: errors.babies ? '2px solid #DC2626' : '1px solid #ccc', padding: 8, color: '#111', background: '#fff' }}
                 required
               />
-              <span style={{ fontSize: 13, marginLeft: 2 }}>Bebés</span>
+              <span style={{ fontSize: 13, marginLeft: 4 }}>Bebés</span>
             </div>
           </div>
           {touched.adults && errors.adults && (
@@ -354,41 +386,76 @@ export default function Home() {
             <div style={{ color: "#DC2626", fontSize: 13 }} aria-live="polite">{errors.babies}</div>
           )}
         </div>
-        {/* Capacidad */}
         {errors.capacity && (
-          <div style={{ color: "#DC2626", fontSize: 13, flexBasis: '100%' }} aria-live="polite">{errors.capacity}</div>
+          <div style={{ color: "#DC2626", fontSize: 13, gridColumn: '1 / -1' }} aria-live="polite">{errors.capacity}</div>
         )}
         <button
           type="submit"
           style={{
+            gridColumn: '1 / -1',
+            justifySelf: 'flex-end',
             background: Object.keys(errors).length === 0 ? '#2563EB' : '#94a3b8',
             color: '#fff',
             fontWeight: 600,
             border: 'none',
-            borderRadius: 8,
+            borderRadius: 999,
             padding: '12px 32px',
             fontSize: 16,
             cursor: Object.keys(errors).length === 0 ? 'pointer' : 'not-allowed',
-            marginLeft: 'auto',
             marginTop: 8,
-            boxShadow: '0 1px 4px #0001',
-            transition: 'background 0.2s',
+            boxShadow: '0 12px 30px rgba(37, 99, 235, 0.25)',
+            transition: 'background 0.2s, transform 0.2s',
           }}
           disabled={Object.keys(errors).length > 0}
           aria-disabled={Object.keys(errors).length > 0}
+          onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.98)'}
+          onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+          onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
         >
           Buscar
         </button>
       </form>
 
-      {/* Estados de error de red/servidor */}
+      {Array.isArray(results) && results.length > 0 && (
+        <div style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 16,
+          borderRadius: 12,
+          border: '1px solid #e2e8f0',
+          padding: 16,
+          marginBottom: 16,
+          alignItems: 'center',
+          background: '#f8fafc',
+        }} aria-label="Filtros adicionales">
+          <strong style={{ fontSize: 14 }}>Filtros</strong>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+            <input type="checkbox" checked={filters.offerOnly} onChange={handleOfferToggle} /> Solo habitaciones con oferta
+          </label>
+          <div style={{ display: 'flex', flexDirection: 'column', fontSize: 14 }}>
+            <label htmlFor="filter-max-price">Precio máximo por noche</label>
+            <input
+              id="filter-max-price"
+              type="number"
+              min={0}
+              value={filters.maxPrice}
+              onChange={handleMaxPriceChange}
+              placeholder="Ej: 300"
+              style={{ width: 120, borderRadius: 8, border: '1px solid #cbd5f5', padding: 6, marginTop: 4 }}
+            />
+          </div>
+          {filterTouched && showFilteredNoResults && (
+            <span style={{ fontSize: 13, color: '#64748b' }}>No hay habitaciones que cumplan con los filtros actuales.</span>
+          )}
+        </div>
+      )}
+
       {apiError && (
         <div style={{ color: '#DC2626', margin: '16px 0', fontWeight: 500 }} aria-live="polite">
           {apiError} <button onClick={() => setApiError("")} style={{ marginLeft: 8, background: 'none', border: 'none', color: '#2563EB', cursor: 'pointer' }}>Reintentar</button>
         </div>
       )}
 
-      {/* Loading skeletons */}
       {loading && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginTop: 24 }}>
           {[1, 2].map((i) => (
@@ -402,36 +469,29 @@ export default function Home() {
         </div>
       )}
 
-      {/* Resultados */}
-      {results && Array.isArray(results) && results.length > 0 && (
+      {Array.isArray(filteredResults) && filteredResults.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginTop: 24 }}>
-          {results.map((hotel, i) => (
-            <div key={i} style={{ background: '#fff', borderRadius: 16, boxShadow: '0 2px 8px #0001', padding: 20, display: 'flex', flexDirection: 'column', minHeight: 220, color: '#111' }}>
-              {/* Imagen simulada */}
-              <div style={{ width: '100%', aspectRatio: '16/9', background: '#cbd5e1', borderRadius: 12, marginBottom: 16, objectFit: 'cover', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: 24 }}>
+          {filteredResults.map((hotel, hotelIndex) => (
+            <div key={`${hotel.hotel}-${hotelIndex}`} style={{ background: '#fff', borderRadius: 16, boxShadow: '0 2px 8px #0001', padding: 20, display: 'flex', flexDirection: 'column', color: '#111' }}>
+              <div style={{ width: '100%', aspectRatio: '16/9', background: '#cbd5e1', borderRadius: 12, marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: 24 }}>
                 <span role="img" aria-label="Hotel">🏨</span>
               </div>
-              <div style={{ fontWeight: 600, fontSize: 20, marginBottom: 4, color: '#111' }}>{hotel.hotel}</div>
-              {hotel.rooms && hotel.rooms.length > 0 && (
-                <div style={{ marginBottom: 8 }}>
-                  {hotel.rooms.map((room, j) => (
-                    <span key={j} style={{ display: 'inline-block', background: '#2563EB', color: '#fff', borderRadius: 8, padding: '2px 10px', fontSize: 13, marginRight: 6, marginBottom: 2 }}>
-                      {room.type}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {hotel.rooms && hotel.rooms.length > 0 && hotel.rooms.map((room, j) => (
-                <div key={j} style={{ marginBottom: 6 }}>
-                  <span style={{ fontWeight: 500, color: '#111' }}>Precio total: </span>${room.price} <span style={{ color: '#64748b', fontSize: 13 }}>/ {room.type}</span><br />
-                  <span style={{ fontWeight: 500, color: '#111' }}>Precio por noche: </span>${room.price_per_night.toFixed(2)}<br />
-                  {room.offer && <span style={{ background: '#16A34A', color: '#fff', borderRadius: 8, padding: '2px 8px', fontSize: 12, marginLeft: 4 }}>Oferta: {room.offer}</span>}
-                  <div style={{ marginTop: '8px', display: 'flex', gap: 8 }}>
+              <div style={{ fontWeight: 600, fontSize: 20, marginBottom: 12 }}>{hotel.hotel}</div>
+              {hotel.rooms.map((room, roomIndex) => (
+                <div key={`${room.name}-${roomIndex}`} style={{ borderTop: roomIndex === 0 ? 'none' : '1px solid #e2e8f0', paddingTop: roomIndex === 0 ? 0 : 12, marginBottom: 12 }}>
+                  <div style={{ fontWeight: 600, fontSize: 16 }}>{room.name}</div>
+                  <div style={{ fontSize: 14, color: '#475569' }}>Tipo: {room.type}</div>
+                  <div style={{ fontSize: 14, color: '#475569' }}>Capacidad: {room.capacity}</div>
+                  <div style={{ fontSize: 14, color: '#047857', fontWeight: 600 }}>Estado: {room.state}</div>
+                  <div style={{ fontSize: 14, marginTop: 6 }}>Precio por noche: <strong>{formatCurrency(room.price_per_night)}</strong></div>
+                  <div style={{ fontSize: 13, color: '#64748b' }}>Total para {nights} noche{nights !== 1 ? 's' : ''}: {formatCurrency(room.price)}</div>
+                  {room.offer && <div style={{ background: '#16A34A', color: '#fff', borderRadius: 8, padding: '2px 8px', fontSize: 12, display: 'inline-block', marginTop: 6 }}>Oferta: {room.offer}</div>}
+                  <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
                     <button
                       style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 20px', fontWeight: 600, cursor: 'pointer', fontSize: 15 }}
                       onClick={() => {
                         setSelectedHotel(hotel);
-                        setSelectedRoom(room);
+                        setSelectedRoom({ ...room, price: room.price, price_per_night: room.price_per_night });
                         setModalOpen(true);
                       }}
                     >Reservar</button>
@@ -445,40 +505,68 @@ export default function Home() {
                   </div>
                 </div>
               ))}
-  // ...existing code...
-  // Modal de reserva de huéspedes
-  {modalOpen && selectedHotel && selectedRoom && (
-    <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.25)', zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ background: '#fff', borderRadius: 16, padding: 32, minWidth: 420, maxWidth: 600, boxShadow: '0 4px 24px #0002', position: 'relative' }}>
-        <button onClick={() => setModalOpen(false)} style={{ position: 'absolute', top: 16, right: 20, background: 'none', border: 'none', fontSize: 26, color: '#64748b', cursor: 'pointer' }} aria-label="Cerrar">×</button>
-        <div style={{ fontWeight: 600, fontSize: 22, marginBottom: 18 }}>Reserva de habitación</div>
-        <div style={{ marginBottom: 16 }}>
-          <div><b>Hotel:</b> {selectedHotel.hotel}</div>
-          <div><b>Habitación:</b> {selectedRoom.type}</div>
-          <div><b>Precio total:</b> ${selectedRoom.price}</div>
-          <div><b>Precio por noche:</b> ${selectedRoom.price_per_night.toFixed(2)}</div>
-        </div>
-        {/* Formulario de huéspedes y confirmación de reserva */}
-        <GuestFormModal 
-          hotel={selectedHotel}
-          room={selectedRoom}
-          checkin={form.checkin}
-          checkout={form.checkout}
-          onClose={() => setModalOpen(false)}
-        />
-      </div>
-    </div>
-  )}
             </div>
           ))}
         </div>
       )}
 
-      {/* Sin resultados */}
-      {results && Array.isArray(results) && results.length === 0 && !apiError && !loading && (
+      {showFilteredNoResults && (
         <div style={{ textAlign: 'center', color: '#64748b', marginTop: 48, fontSize: 20 }}>
-          <span role="img" aria-label="Sin resultados" style={{ fontSize: 40 }}>😕</span><br />
-          No se encontraron hoteles disponibles con los criterios seleccionados
+          <span role="img" aria-label="Sin resultados" style={{ fontSize: 40 }}>🔍</span><br />
+          No se encontraron habitaciones disponibles para los criterios seleccionados
+        </div>
+      )}
+
+      {Array.isArray(results) && results.length === 0 && !apiError && !loading && !filterTouched && (
+        <div style={{ textAlign: 'center', color: '#64748b', marginTop: 48, fontSize: 20 }}>
+          <span role="img" aria-label="Sin resultados" style={{ fontSize: 40 }}>🔍</span><br />
+          No se encontraron habitaciones disponibles para los criterios seleccionados
+        </div>
+      )}
+
+        </div>
+        <div style={{ position: 'sticky', top: 24 }}>
+          <ReceptionPanel />
+        </div>
+      </div>
+
+      {modalOpen && selectedHotel && selectedRoom && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.25)', zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: 32, minWidth: 420, maxWidth: 600, boxShadow: '0 4px 24px #0002', position: 'relative' }}>
+            <button onClick={() => setModalOpen(false)} style={{ position: 'absolute', top: 16, right: 20, background: 'none', border: 'none', fontSize: 26, color: '#64748b', cursor: 'pointer' }} aria-label="Cerrar">×</button>
+            <div style={{ fontWeight: 600, fontSize: 22, marginBottom: 18 }}>Reserva de habitación</div>
+            <div style={{ marginBottom: 16 }}>
+              <div><b>Hotel:</b> {selectedHotel.hotel}</div>
+              <div><b>Habitación:</b> {selectedRoom.name || selectedRoom.type}</div>
+              <div><b>Tipo:</b> {selectedRoom.type}</div>
+              <div><b>Capacidad:</b> {selectedRoom.capacity}</div>
+              <div><b>Precio por noche:</b> {formatCurrency(selectedRoom.price_per_night)}</div>
+              <div><b>Total:</b> {formatCurrency(selectedRoom.price)}</div>
+            </div>
+            <GuestFormModal
+              hotel={selectedHotel}
+              room={selectedRoom}
+              checkin={form.checkin}
+              checkout={form.checkout}
+              onClose={() => setModalOpen(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      {roomsModalOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.25)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: 24, minWidth: 360, boxShadow: '0 4px 24px #0003', position: 'relative' }}>
+            <button onClick={() => setRoomsModalOpen(false)} style={{ position: 'absolute', top: 12, right: 16, background: 'none', border: 'none', fontSize: 24, color: '#64748b', cursor: 'pointer' }} aria-label="Cerrar">×</button>
+            <div style={{ fontWeight: 600, fontSize: 20, marginBottom: 12 }}>Habitaciones de {roomsHotelName}</div>
+            <ul style={{ paddingLeft: 18, color: '#475569' }}>
+              {Array.isArray(filteredResults) && filteredResults
+                .find((hotel) => hotel.hotel === roomsHotelName)?.rooms
+                .map((room) => (
+                  <li key={`${room.name}-modal`}>{room.name} – {formatCurrency(room.price_per_night)} por noche</li>
+                )) || <li>No hay información disponible.</li>}
+            </ul>
+          </div>
         </div>
       )}
     </div>

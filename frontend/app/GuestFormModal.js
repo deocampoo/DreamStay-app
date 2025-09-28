@@ -1,52 +1,184 @@
-import React, { useState } from "react";
+﻿"use client";
+import React, { useState, useMemo } from "react";
+
+const NAME_REGEX = /^[A-Za-zÁÉÍÓÚáéíóúÑñ ]+$/;
+const CAPACITY = {
+  Single: { adults: 1, children: 0, babies: 0 },
+  Doble: { adults: 2, children: 1, babies: 0 },
+  Suite: { adults: 3, children: 2, babies: 1 },
+};
+
+function parseBirth(value) {
+  if (!value) return null;
+  if (value.includes("/")) {
+    const parts = value.split("/").map((part) => part.trim());
+    if (parts.length !== 3) return null;
+    let [first, second, year] = parts;
+    if (!first || !second || !year) return null;
+    const firstNum = parseInt(first, 10);
+    const secondNum = parseInt(second, 10);
+    if (Number.isNaN(firstNum) || Number.isNaN(secondNum)) return null;
+    let day = first;
+    let month = second;
+    if (firstNum <= 12 && secondNum > 12) {
+      day = second;
+      month = first;
+    } else if (firstNum > 12 && secondNum <= 12) {
+      day = first;
+      month = second;
+    }
+    const iso = `${year.padStart(4, "0")}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+    const date = new Date(iso);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatToDMY(value) {
+  if (!value) return "";
+  const date = parseBirth(value);
+  if (!date) return "";
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+function getGuestInfo(guest) {
+  const birthDate = parseBirth(guest.birth);
+  if (!birthDate) {
+    return { age: null, category: null, isMinor: false, isFuture: false };
+  }
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const beforeBirthday =
+    today.getMonth() < birthDate.getMonth() ||
+    (today.getMonth() === birthDate.getMonth() && today.getDate() < birthDate.getDate());
+  if (beforeBirthday) age -= 1;
+  if (age < 0) {
+    return { age: null, category: null, isMinor: false, isFuture: true };
+  }
+  let category = "adult";
+  if (age < 18) {
+    category = age >= 2 ? "child" : "baby";
+  }
+  return { age, category, isMinor: age < 18, isFuture: false };
+}
+
+function getCategoryLabel(category) {
+  if (category === "adult") return "Adulto";
+  if (category === "child") return "Niño";
+  if (category === "baby") return "Bebé";
+  return "Sin clasificar";
+}
 
 export default function GuestFormModal({ hotel, room, checkin, checkout, onClose }) {
-  const [guests, setGuests] = useState([
-    { name: "", birth: "" }
-  ]);
+  const [guests, setGuests] = useState([{ name: "", birth: "" }]);
   const [errors, setErrors] = useState([]);
   const [loading, setLoading] = useState(false);
   const [confirmation, setConfirmation] = useState(null);
 
-  // Validación simple
-  const validate = () => {
-    const errs = [];
-    guests.forEach((g, i) => {
-      if (!g.name.trim()) errs.push(`Nombre del huésped ${i+1} es obligatorio.`);
-      else if (!/^[a-zA-ZáéíóúÁÉÍÓÚüÜñÑ ]+$/.test(g.name)) errs.push(`Nombre del huésped ${i+1} solo admite letras y espacios.`);
-      if (!g.birth) errs.push(`Fecha de nacimiento del huésped ${i+1} es obligatoria.`);
-      else if (!/^\d{4}-\d{2}-\d{2}$/.test(g.birth)) errs.push(`Fecha de nacimiento del huésped ${i+1} debe ser seleccionada.`);
+  const capacity = useMemo(() => CAPACITY[room?.type] || CAPACITY.Single, [room?.type]);
+  const totalCapacity = capacity.adults + capacity.children + capacity.babies;
+
+  const guestInfos = useMemo(() => guests.map(getGuestInfo), [guests]);
+  const summary = useMemo(() => {
+    const totals = { adult: 0, child: 0, baby: 0 };
+    guestInfos.forEach((info) => {
+      if (info && info.category) {
+        totals[info.category] += 1;
+      }
     });
-    if (!guests.some(g => {
-      if (!g.birth) return false;
-      const birth = new Date(g.birth);
-      const today = new Date();
-      const age = today.getFullYear() - birth.getFullYear() - ((today.getMonth() < birth.getMonth() || (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) ? 1 : 0);
-      return age >= 18;
-    })) errs.push("Debe haber al menos un adulto en la reserva.");
-    return errs;
+    return totals;
+  }, [guestInfos]);
+
+  const validate = () => {
+    const validationErrors = [];
+    const today = new Date();
+    const counts = { adult: 0, child: 0, baby: 0 };
+
+    guests.forEach((guest, idx) => {
+      const position = idx + 1;
+      const name = (guest.name || "").trim();
+      if (!name) {
+        validationErrors.push(`Nombre del huésped ${position} es obligatorio.`);
+      } else if (!NAME_REGEX.test(name)) {
+        validationErrors.push(`Nombre del huésped ${position} solo admite letras y espacios.`);
+      }
+
+      if (!guest.birth) {
+        validationErrors.push(`Fecha de nacimiento del huésped ${position} es obligatoria.`);
+        return;
+      }
+      const birthDate = parseBirth(guest.birth);
+      if (!birthDate) {
+        validationErrors.push(`Fecha de nacimiento del huésped ${position} debe tener formato válido (dd/mm/yyyy).`);
+        return;
+      }
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const beforeBirthday =
+        today.getMonth() < birthDate.getMonth() ||
+        (today.getMonth() === birthDate.getMonth() && today.getDate() < birthDate.getDate());
+      if (beforeBirthday) age -= 1;
+      if (age < 0) {
+        validationErrors.push(`Fecha de nacimiento del huésped ${position} no puede ser futura.`);
+        return;
+      }
+      if (age >= 18) counts.adult += 1;
+      else if (age >= 2) counts.child += 1;
+      else counts.baby += 1;
+    });
+
+    if (counts.adult === 0) {
+      validationErrors.push("Debe haber al menos un adulto en la reserva.");
+    }
+
+    if (counts.adult > capacity.adults || counts.child > capacity.children || counts.baby > capacity.babies) {
+      validationErrors.push("La cantidad de huéspedes excede la capacidad de la habitación seleccionada.");
+    }
+
+    if (guests.length > totalCapacity) {
+      validationErrors.push("No se pueden registrar más huéspedes que la capacidad total de la habitación.");
+    }
+
+    return { validationErrors, counts };
   };
 
   const handleChange = (idx, field, value) => {
-    setGuests(prev => prev.map((g, i) => i === idx ? { ...g, [field]: value } : g));
+    setGuests((prev) => prev.map((guest, index) => (index === idx ? { ...guest, [field]: value } : guest)));
   };
 
   const handleAddGuest = () => {
-    setGuests(prev => [...prev, { name: "", birth: "" }]);
-  };
-  const handleRemoveGuest = (idx) => {
-    setGuests(prev => prev.filter((_, i) => i !== idx));
+    if (guests.length >= totalCapacity) {
+      setErrors((prev) => {
+        const message = "No se pueden agregar más huéspedes para esta habitación.";
+        return prev.includes(message) ? prev : [...prev, message];
+      });
+      return;
+    }
+    setGuests((prev) => [...prev, { name: "", birth: "" }]);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const errs = validate();
-    setErrors(errs);
-    if (errs.length > 0) return;
+  const handleRemoveGuest = (idx) => {
+    setGuests((prev) => prev.filter((_, index) => index !== idx));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    const { validationErrors } = validate();
+    setErrors(validationErrors);
+    if (validationErrors.length > 0) return;
+
     setLoading(true);
     setConfirmation(null);
+
     try {
-      const res = await fetch("http://localhost:5000/api/reservations", {
+      const payloadGuests = guests.map((guest) => ({
+        name: guest.name.trim(),
+        birth: formatToDMY(guest.birth),
+      }));
+      const response = await fetch("http://localhost:5000/api/reservations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -54,19 +186,37 @@ export default function GuestFormModal({ hotel, room, checkin, checkout, onClose
           room_type: room.type,
           checkin,
           checkout,
-          guests: guests.map(g => ({ name: g.name, birth: g.birth }))
-        })
+          guests: payloadGuests,
+        }),
       });
-      const data = await res.json();
-      if (!res.ok) setErrors(data.errors || [data.message || "Error de reserva"]);
-      else setConfirmation(data);
-    } catch (err) {
+      const data = await response.json();
+      if (!response.ok) {
+        const serverErrors = data.errors || (data.error ? [data.error] : [data.message || "Error de reserva"]);
+        setErrors(serverErrors);
+      } else {
+        setConfirmation(data);
+        setErrors([]);
+      }
+    } catch (error) {
       setErrors(["Error de conexión con el backend"]);
     }
+
     setLoading(false);
   };
 
+  const minorLabel = "¿Es menor de 18 años?";
+  const disableAddGuest = guests.length >= totalCapacity;
+
   if (confirmation) {
+    const detail = confirmation.price_detail || {};
+    const counts = detail.counts || {};
+    const perNight = detail.per_night || {};
+    const formatValue = (value) => {
+      if (typeof value === "number") {
+        return value.toFixed(2);
+      }
+      return value ?? "0";
+    };
     return (
       <div>
         <div style={{ fontWeight: 600, fontSize: 20, marginBottom: 12 }}>Reserva confirmada</div>
@@ -75,10 +225,30 @@ export default function GuestFormModal({ hotel, room, checkin, checkout, onClose
         <div><b>Habitación:</b> {confirmation.room_type}</div>
         <div><b>Check-in:</b> {confirmation.checkin}</div>
         <div><b>Check-out:</b> {confirmation.checkout}</div>
-        <div><b>Huéspedes:</b> {confirmation.guests.map((g, i) => (<div key={i}>{g.name} ({g.birth})</div>))}</div>
-        <div><b>Total:</b> ${confirmation.total}</div>
-        {confirmation.offer && <div><b>Oferta aplicada:</b> {confirmation.offer}</div>}
-        <button onClick={onClose} style={{ marginTop: 18, background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontWeight: 600, cursor: 'pointer' }}>Cerrar</button>
+        <div style={{ marginTop: 12 }}>
+          <b>Detalle de huéspedes:</b>
+          {confirmation.guests && confirmation.guests.map((guest, index) => (
+            <div key={index} style={{ marginTop: 4 }}>
+              {guest.name} - Edad: {guest.age ?? "-"} - Categoría: {getCategoryLabel(guest.category)}
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <b>Detalle de precio:</b>
+          <div>Noches: {detail.nights ?? "-"}</div>
+          <div>Adultos: {counts.adult ?? 0} x ${formatValue(perNight.adult)}</div>
+          <div>Niños: {counts.child ?? 0} x ${formatValue(perNight.child)}</div>
+          <div>Bebés: {counts.baby ?? 0} x ${formatValue(perNight.baby)}</div>
+          <div>Subtotal por noche: ${formatValue(detail.subtotal_per_night)}</div>
+          <div>Total: ${formatValue(detail.total ?? confirmation.total)}</div>
+          {confirmation.offer && <div>Oferta aplicada: {confirmation.offer}</div>}
+        </div>
+        <button
+          onClick={onClose}
+          style={{ marginTop: 18, background: "#2563EB", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontWeight: 600, cursor: "pointer" }}
+        >
+          Cerrar
+        </button>
       </div>
     );
   }
@@ -86,33 +256,82 @@ export default function GuestFormModal({ hotel, room, checkin, checkout, onClose
   return (
     <form onSubmit={handleSubmit} style={{ marginTop: 12 }}>
       <div style={{ fontWeight: 500, fontSize: 17, marginBottom: 10 }}>Datos de los huéspedes</div>
-      {guests.map((g, i) => (
-        <div key={i} style={{ marginBottom: 10, display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input
-            type="text"
-            placeholder="Nombre completo"
-            value={g.name}
-            onChange={e => handleChange(i, "name", e.target.value)}
-            style={{ borderRadius: 8, border: '1px solid #ccc', padding: 8, width: 180 }}
-            required
-          />
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <label style={{ fontSize: 13, marginBottom: 2 }}>Fecha de nacimiento</label>
+      {guests.map((guest, index) => {
+        const info = getGuestInfo(guest);
+        return (
+          <div key={index} style={{ marginBottom: 16, display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
             <input
-              type="date"
-              value={g.birth}
-              onChange={e => handleChange(i, "birth", e.target.value)}
-              style={{ borderRadius: 8, border: '1px solid #ccc', padding: 8, width: 140 }}
+              type="text"
+              placeholder="Nombre completo"
+              value={guest.name}
+              onChange={(event) => handleChange(index, "name", event.target.value)}
+              style={{ borderRadius: 8, border: "1px solid #ccc", padding: 8, width: 200 }}
               required
             />
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={{ fontSize: 13 }}>Fecha de nacimiento</label>
+              <input
+                type="date"
+                value={guest.birth}
+                onChange={(event) => handleChange(index, "birth", event.target.value)}
+                style={{ borderRadius: 8, border: "1px solid #ccc", padding: 8, width: 180 }}
+                required
+              />
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                <input type="checkbox" checked={info.isMinor} readOnly /> {minorLabel}
+              </label>
+              <div style={{ fontSize: 13 }}>Categoría: {getCategoryLabel(info.category)}</div>
+              <div style={{ fontSize: 13 }}>Edad calculada: {info.age ?? "-"}</div>
+            </div>
+            {guests.length > 1 && (
+              <button
+                type="button"
+                onClick={() => handleRemoveGuest(index)}
+                style={{ background: "#DC2626", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontWeight: 600, cursor: "pointer", height: 38 }}
+              >
+                Eliminar
+              </button>
+            )}
           </div>
-          {guests.length > 1 && <button type="button" onClick={() => handleRemoveGuest(i)} style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 12px', fontWeight: 600, cursor: 'pointer' }}>Eliminar</button>}
+        );
+      })}
+      <div style={{ fontSize: 13, marginBottom: 8 }}>
+        Distribución actual: Adultos {summary.adult}, Niños {summary.child}, Bebés {summary.baby}. Capacidad máxima: Adultos {capacity.adults}, Niños {capacity.children}, Bebés {capacity.babies}.
+      </div>
+      <button
+        type="button"
+        onClick={handleAddGuest}
+        disabled={disableAddGuest}
+        style={{ background: disableAddGuest ? "#9ca3af" : "#16A34A", color: "#fff", border: "none", borderRadius: 8, padding: "8px 18px", fontWeight: 600, cursor: disableAddGuest ? "not-allowed" : "pointer", marginBottom: 10 }}
+      >
+        Agregar huésped
+      </button>
+      {disableAddGuest && (
+        <div style={{ color: "#DC2626", fontSize: 13, marginBottom: 8 }}>
+          Capacidad máxima alcanzada para esta habitación.
         </div>
-      ))}
-      <button type="button" onClick={handleAddGuest} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 18px', fontWeight: 600, cursor: 'pointer', marginBottom: 10 }}>Agregar huésped</button>
-      {errors.length > 0 && <div style={{ color: '#DC2626', marginBottom: 10 }}>{errors.map((e, i) => (<div key={i}>{e}</div>))}</div>}
-      <button type="submit" disabled={loading} style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontWeight: 600, cursor: 'pointer', marginTop: 8 }}>{loading ? "Confirmando..." : "Confirmar reserva"}</button>
-      <button type="button" onClick={onClose} style={{ marginLeft: 10, background: '#64748b', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontWeight: 600, cursor: 'pointer', marginTop: 8 }}>Cancelar</button>
+      )}
+      {errors.length > 0 && (
+        <div style={{ color: "#DC2626", marginBottom: 10 }}>
+          {errors.map((error, index) => (
+            <div key={index}>{error}</div>
+          ))}
+        </div>
+      )}
+      <button
+        type="submit"
+        disabled={loading}
+        style={{ background: "#2563EB", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontWeight: 600, cursor: loading ? "wait" : "pointer", marginTop: 8 }}
+      >
+        {loading ? "Confirmando..." : "Confirmar reserva"}
+      </button>
+      <button
+        type="button"
+        onClick={onClose}
+        style={{ marginLeft: 10, background: "#64748b", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontWeight: 600, cursor: "pointer", marginTop: 8 }}
+      >
+        Cancelar
+      </button>
     </form>
   );
 }
