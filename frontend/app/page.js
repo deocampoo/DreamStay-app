@@ -227,309 +227,277 @@ export default function Home() {
   };
 
   return (
-    <div style={{ maxWidth: 1180, margin: "2rem auto", padding: 24, fontFamily: 'Inter, system-ui, sans-serif', background: '#fff', minHeight: '100vh', color: '#111' }}>
+    <div className="app-shell">
       <nav style={{ marginBottom: 16, color: '#6b7280', fontSize: 14 }} aria-label="breadcrumb">
         Home &gt; Search results
       </nav>
       <h1 style={{ fontWeight: 600, fontSize: 28, marginBottom: 24, color: '#111' }}>Búsqueda de hoteles</h1>
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.75fr) minmax(280px, 1fr)', gap: 24, alignItems: 'start', marginTop: 16 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-
-      <form
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: "16px 20px",
-          background: "#f8fafc",
-          borderRadius: 20,
-          border: "1px solid #e2e8f0",
-          padding: 24,
-          boxShadow: "0 18px 40px rgba(15, 23, 42, 0.08)"
-        }}
-        autoComplete="off"
-        onSubmit={handleSearch}
-        aria-label="Hotel search form"
-      >
-        <div style={{ flex: 1, minWidth: 180 }}>
-          <label htmlFor="city" style={{ fontWeight: 500 }}>Destino</label>
-          <input
-            id="city"
-            name="city"
-            type="text"
-            value={form.city}
-            onChange={handleCityChange}
-            aria-label="Ciudad"
-            aria-invalid={!!errors.city}
-            aria-describedby="city-error"
-            style={{ width: "100%", borderRadius: 8, border: errors.city ? '2px solid #DC2626' : '1px solid #ccc', padding: 8, marginTop: 4, color: '#111', background: '#fff' }}
+      <div className="search-layout">
+        <div className="search-main">
+          <form
+            className="search-form"
             autoComplete="off"
-            list="city-list"
-            required
-          />
-          <datalist id="city-list">
-            {citySuggestions.map((c) => (
-              <option key={c} value={c} />
-            ))}
-          </datalist>
-          {touched.city && errors.city && (
-            <div id="city-error" style={{ color: "#DC2626", fontSize: 13 }} aria-live="polite">{errors.city}</div>
-          )}
-        </div>
-        <div style={{ minWidth: 160 }}>
-          <label htmlFor="checkin" style={{ fontWeight: 500 }}>Check-in</label>
-          <input
-            id="checkin"
-            name="checkin"
-            type="date"
-            value={form.checkin}
-            onChange={handleChange}
-            aria-label="Fecha de entrada"
-            aria-invalid={!!errors.checkin}
-            aria-describedby="checkin-error"
-            style={{ width: "100%", borderRadius: 8, border: errors.checkin ? '2px solid #DC2626' : '1px solid #ccc', padding: 8, marginTop: 4, color: '#111', background: '#fff' }}
-            required
-          />
-          {touched.checkin && errors.checkin && (
-            <div id="checkin-error" style={{ color: "#DC2626", fontSize: 13 }} aria-live="polite">{errors.checkin}</div>
-          )}
-        </div>
-        <div style={{ minWidth: 160 }}>
-          <label htmlFor="checkout" style={{ fontWeight: 500 }}>Check-out</label>
-          <input
-            id="checkout"
-            name="checkout"
-            type="date"
-            value={form.checkout}
-            onChange={handleChange}
-            aria-label="Fecha de salida"
-            aria-invalid={!!errors.checkout}
-            aria-describedby="checkout-error"
-            style={{ width: "100%", borderRadius: 8, border: errors.checkout ? '2px solid #DC2626' : '1px solid #ccc', padding: 8, marginTop: 4, color: '#111', background: '#fff' }}
-            required
-          />
-          {touched.checkout && errors.checkout && (
-            <div id="checkout-error" style={{ color: "#DC2626", fontSize: 13 }} aria-live="polite">{errors.checkout}</div>
-          )}
-        </div>
-        <div style={{ minWidth: 150 }}>
-          <label htmlFor="room_type" style={{ fontWeight: 500 }}>Tipo de habitación</label>
-          <select
-            id="room_type"
-            name="room_type"
-            value={form.room_type}
-            onChange={handleChange}
-            aria-label="Tipo de habitación"
-            style={{ width: "100%", borderRadius: 8, border: errors.room_type ? '2px solid #DC2626' : '1px solid #ccc', padding: 8, marginTop: 4, color: '#111', background: '#fff' }}
-            required
+            onSubmit={handleSearch}
+            aria-label="Hotel search form"
           >
-            {ROOM_TYPES.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-          {touched.room_type && errors.room_type && (
-            <div style={{ color: "#DC2626", fontSize: 13 }} aria-live="polite">{errors.room_type}</div>
-          )}
-        </div>
-        <div style={{ minWidth: 180, display: 'flex', gap: 8, flexDirection: 'column' }}>
-          <label style={{ fontWeight: 500 }}>Huéspedes</label>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <div>
+            <div style={{ flex: 1, minWidth: 180 }}>
+              <label htmlFor="city" style={{ fontWeight: 500 }}>Destino</label>
               <input
-                name="adults"
-                type="number"
-                min={1}
-                value={form.adults}
-                onChange={handleIntChange}
-                aria-label="Adultos"
-                aria-invalid={!!errors.adults}
-                style={{ width: 58, borderRadius: 8, border: errors.adults ? '2px solid #DC2626' : '1px solid #ccc', padding: 8, color: '#111', background: '#fff' }}
+                id="city"
+                name="city"
+                type="text"
+                value={form.city}
+                onChange={handleCityChange}
+                aria-label="Ciudad"
+                aria-invalid={!!errors.city}
+                aria-describedby="city-error"
+                style={{ width: "100%", borderRadius: 8, border: errors.city ? '2px solid #DC2626' : '1px solid #ccc', padding: 8, marginTop: 4, color: '#111', background: '#fff' }}
+                autoComplete="off"
+                list="city-list"
                 required
               />
-              <span style={{ fontSize: 13, marginLeft: 4 }}>Adultos</span>
+              <datalist id="city-list">
+                {citySuggestions.map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
+              {touched.city && errors.city && (
+                <div id="city-error" style={{ color: "#DC2626", fontSize: 13 }} aria-live="polite">{errors.city}</div>
+              )}
             </div>
-            <div>
+            <div style={{ minWidth: 160 }}>
+              <label htmlFor="checkin" style={{ fontWeight: 500 }}>Check-in</label>
               <input
-                name="children"
-                type="number"
-                min={0}
-                value={form.children}
-                onChange={handleIntChange}
-                aria-label="Niños"
-                aria-invalid={!!errors.children}
-                style={{ width: 58, borderRadius: 8, border: errors.children ? '2px solid #DC2626' : '1px solid #ccc', padding: 8, color: '#111', background: '#fff' }}
+                id="checkin"
+                name="checkin"
+                type="date"
+                value={form.checkin}
+                onChange={handleChange}
+                aria-label="Fecha de entrada"
+                aria-invalid={!!errors.checkin}
+                aria-describedby="checkin-error"
+                style={{ width: "100%", borderRadius: 8, border: errors.checkin ? '2px solid #DC2626' : '1px solid #ccc', padding: 8, marginTop: 4, color: '#111', background: '#fff' }}
                 required
               />
-              <span style={{ fontSize: 13, marginLeft: 4 }}>Niños</span>
+              {touched.checkin && errors.checkin && (
+                <div id="checkin-error" style={{ color: "#DC2626", fontSize: 13 }} aria-live="polite">{errors.checkin}</div>
+              )}
             </div>
-            <div>
+            <div style={{ minWidth: 160 }}>
+              <label htmlFor="checkout" style={{ fontWeight: 500 }}>Check-out</label>
               <input
-                name="babies"
-                type="number"
-                min={0}
-                value={form.babies}
-                onChange={handleIntChange}
-                aria-label="Bebés"
-                aria-invalid={!!errors.babies}
-                style={{ width: 58, borderRadius: 8, border: errors.babies ? '2px solid #DC2626' : '1px solid #ccc', padding: 8, color: '#111', background: '#fff' }}
+                id="checkout"
+                name="checkout"
+                type="date"
+                value={form.checkout}
+                onChange={handleChange}
+                aria-label="Fecha de salida"
+                aria-invalid={!!errors.checkout}
+                aria-describedby="checkout-error"
+                style={{ width: "100%", borderRadius: 8, border: errors.checkout ? '2px solid #DC2626' : '1px solid #ccc', padding: 8, marginTop: 4, color: '#111', background: '#fff' }}
                 required
               />
-              <span style={{ fontSize: 13, marginLeft: 4 }}>Bebés</span>
+              {touched.checkout && errors.checkout && (
+                <div id="checkout-error" style={{ color: "#DC2626", fontSize: 13 }} aria-live="polite">{errors.checkout}</div>
+              )}
             </div>
-          </div>
-          {touched.adults && errors.adults && (
-            <div style={{ color: "#DC2626", fontSize: 13 }} aria-live="polite">{errors.adults}</div>
-          )}
-          {touched.children && errors.children && (
-            <div style={{ color: "#DC2626", fontSize: 13 }} aria-live="polite">{errors.children}</div>
-          )}
-          {touched.babies && errors.babies && (
-            <div style={{ color: "#DC2626", fontSize: 13 }} aria-live="polite">{errors.babies}</div>
-          )}
-        </div>
-        {errors.capacity && (
-          <div style={{ color: "#DC2626", fontSize: 13, gridColumn: '1 / -1' }} aria-live="polite">{errors.capacity}</div>
-        )}
-        <button
-          type="submit"
-          style={{
-            gridColumn: '1 / -1',
-            justifySelf: 'flex-end',
-            background: Object.keys(errors).length === 0 ? '#2563EB' : '#94a3b8',
-            color: '#fff',
-            fontWeight: 600,
-            border: 'none',
-            borderRadius: 999,
-            padding: '12px 32px',
-            fontSize: 16,
-            cursor: Object.keys(errors).length === 0 ? 'pointer' : 'not-allowed',
-            marginTop: 8,
-            boxShadow: '0 12px 30px rgba(37, 99, 235, 0.25)',
-            transition: 'background 0.2s, transform 0.2s',
-          }}
-          disabled={Object.keys(errors).length > 0}
-          aria-disabled={Object.keys(errors).length > 0}
-          onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.98)'}
-          onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
-          onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-        >
-          Buscar
-        </button>
-      </form>
-
-      {Array.isArray(results) && results.length > 0 && (
-        <div style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 16,
-          borderRadius: 12,
-          border: '1px solid #e2e8f0',
-          padding: 16,
-          marginBottom: 16,
-          alignItems: 'center',
-          background: '#f8fafc',
-        }} aria-label="Filtros adicionales">
-          <strong style={{ fontSize: 14 }}>Filtros</strong>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
-            <input type="checkbox" checked={filters.offerOnly} onChange={handleOfferToggle} /> Solo habitaciones con oferta
-          </label>
-          <div style={{ display: 'flex', flexDirection: 'column', fontSize: 14 }}>
-            <label htmlFor="filter-max-price">Precio máximo por noche</label>
-            <input
-              id="filter-max-price"
-              type="number"
-              min={0}
-              value={filters.maxPrice}
-              onChange={handleMaxPriceChange}
-              placeholder="Ej: 300"
-              style={{ width: 120, borderRadius: 8, border: '1px solid #cbd5f5', padding: 6, marginTop: 4 }}
-            />
-          </div>
-          {filterTouched && showFilteredNoResults && (
-            <span style={{ fontSize: 13, color: '#64748b' }}>No hay habitaciones que cumplan con los filtros actuales.</span>
-          )}
-        </div>
-      )}
-
-      {apiError && (
-        <div style={{ color: '#DC2626', margin: '16px 0', fontWeight: 500 }} aria-live="polite">
-          {apiError} <button onClick={() => setApiError("")} style={{ marginLeft: 8, background: 'none', border: 'none', color: '#2563EB', cursor: 'pointer' }}>Reintentar</button>
-        </div>
-      )}
-
-      {loading && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginTop: 24 }}>
-          {[1, 2].map((i) => (
-            <div key={i} style={{ background: '#fff', borderRadius: 16, boxShadow: '0 2px 8px #0001', padding: 20, minHeight: 220 }}>
-              <div style={{ background: '#e5e7eb', height: 120, borderRadius: 12, marginBottom: 16 }} />
-              <div style={{ background: '#e5e7eb', height: 20, width: '60%', borderRadius: 6, marginBottom: 8 }} />
-              <div style={{ background: '#e5e7eb', height: 16, width: '40%', borderRadius: 6, marginBottom: 8 }} />
-              <div style={{ background: '#e5e7eb', height: 16, width: '80%', borderRadius: 6 }} />
+            <div style={{ minWidth: 150 }}>
+              <label htmlFor="room_type" style={{ fontWeight: 500 }}>Tipo de habitación</label>
+              <select
+                id="room_type"
+                name="room_type"
+                value={form.room_type}
+                onChange={handleChange}
+                aria-label="Tipo de habitación"
+                style={{ width: "100%", borderRadius: 8, border: errors.room_type ? '2px solid #DC2626' : '1px solid #ccc', padding: 8, marginTop: 4, color: '#111', background: '#fff' }}
+                required
+              >
+                {ROOM_TYPES.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+              {touched.room_type && errors.room_type && (
+                <div style={{ color: "#DC2626", fontSize: 13 }} aria-live="polite">{errors.room_type}</div>
+              )}
             </div>
-          ))}
-        </div>
-      )}
-
-      {Array.isArray(filteredResults) && filteredResults.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginTop: 24 }}>
-          {filteredResults.map((hotel, hotelIndex) => (
-            <div key={`${hotel.hotel}-${hotelIndex}`} style={{ background: '#fff', borderRadius: 16, boxShadow: '0 2px 8px #0001', padding: 20, display: 'flex', flexDirection: 'column', color: '#111' }}>
-              <div style={{ width: '100%', aspectRatio: '16/9', background: '#cbd5e1', borderRadius: 12, marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: 24 }}>
-                <span role="img" aria-label="Hotel">🏨</span>
+            <div style={{ minWidth: 180, display: 'flex', gap: 8, flexDirection: 'column' }}>
+              <label style={{ fontWeight: 500 }}>Huéspedes</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div>
+                  <input
+                    name="adults"
+                    type="number"
+                    min={1}
+                    value={form.adults}
+                    onChange={handleIntChange}
+                    aria-label="Adultos"
+                    aria-invalid={!!errors.adults}
+                    style={{ width: 58, borderRadius: 8, border: errors.adults ? '2px solid #DC2626' : '1px solid #ccc', padding: 8, color: '#111', background: '#fff' }}
+                    required
+                  />
+                  <span style={{ fontSize: 13, marginLeft: 4 }}>Adultos</span>
+                </div>
+                <div>
+                  <input
+                    name="children"
+                    type="number"
+                    min={0}
+                    value={form.children}
+                    onChange={handleIntChange}
+                    aria-label="Niños"
+                    aria-invalid={!!errors.children}
+                    style={{ width: 58, borderRadius: 8, border: errors.children ? '2px solid #DC2626' : '1px solid #ccc', padding: 8, color: '#111', background: '#fff' }}
+                    required
+                  />
+                  <span style={{ fontSize: 13, marginLeft: 4 }}>Niños</span>
+                </div>
+                <div>
+                  <input
+                    name="babies"
+                    type="number"
+                    min={0}
+                    value={form.babies}
+                    onChange={handleIntChange}
+                    aria-label="Bebés"
+                    aria-invalid={!!errors.babies}
+                    style={{ width: 58, borderRadius: 8, border: errors.babies ? '2px solid #DC2626' : '1px solid #ccc', padding: 8, color: '#111', background: '#fff' }}
+                    required
+                  />
+                  <span style={{ fontSize: 13, marginLeft: 4 }}>Bebés</span>
+                </div>
               </div>
-              <div style={{ fontWeight: 600, fontSize: 20, marginBottom: 12 }}>{hotel.hotel}</div>
-              {hotel.rooms.map((room, roomIndex) => (
-                <div key={`${room.name}-${roomIndex}`} style={{ borderTop: roomIndex === 0 ? 'none' : '1px solid #e2e8f0', paddingTop: roomIndex === 0 ? 0 : 12, marginBottom: 12 }}>
-                  <div style={{ fontWeight: 600, fontSize: 16 }}>{room.name}</div>
-                  <div style={{ fontSize: 14, color: '#475569' }}>Tipo: {room.type}</div>
-                  <div style={{ fontSize: 14, color: '#475569' }}>Capacidad: {room.capacity}</div>
-                  <div style={{ fontSize: 14, color: '#047857', fontWeight: 600 }}>Estado: {room.state}</div>
-                  <div style={{ fontSize: 14, marginTop: 6 }}>Precio por noche: <strong>{formatCurrency(room.price_per_night)}</strong></div>
-                  <div style={{ fontSize: 13, color: '#64748b' }}>Total para {nights} noche{nights !== 1 ? 's' : ''}: {formatCurrency(room.price)}</div>
-                  {room.offer && <div style={{ background: '#16A34A', color: '#fff', borderRadius: 8, padding: '2px 8px', fontSize: 12, display: 'inline-block', marginTop: 6 }}>Oferta: {room.offer}</div>}
-                  <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
-                    <button
-                      style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 20px', fontWeight: 600, cursor: 'pointer', fontSize: 15 }}
-                      onClick={() => {
-                        setSelectedHotel(hotel);
-                        setSelectedRoom({ ...room, price: room.price, price_per_night: room.price_per_night });
-                        setModalOpen(true);
-                      }}
-                    >Reservar</button>
-                    <button
-                      style={{ background: '#fff', color: '#2563EB', border: '1.5px solid #2563EB', borderRadius: 8, padding: '8px 20px', fontWeight: 600, cursor: 'pointer', fontSize: 15 }}
-                      onClick={() => {
-                        setRoomsHotelName(hotel.hotel);
-                        setRoomsModalOpen(true);
-                      }}
-                    >Ver</button>
-                  </div>
+              {touched.adults && errors.adults && (
+                <div style={{ color: "#DC2626", fontSize: 13 }} aria-live="polite">{errors.adults}</div>
+              )}
+              {touched.children && errors.children && (
+                <div style={{ color: "#DC2626", fontSize: 13 }} aria-live="polite">{errors.children}</div>
+              )}
+              {touched.babies && errors.babies && (
+                <div style={{ color: "#DC2626", fontSize: 13 }} aria-live="polite">{errors.babies}</div>
+              )}
+            </div>
+            {errors.capacity && (
+              <div style={{ color: "#DC2626", fontSize: 13, gridColumn: '1 / -1' }} aria-live="polite">{errors.capacity}</div>
+            )}
+            <button
+              type="submit"
+              style={{
+                gridColumn: '1 / -1',
+                justifySelf: 'flex-end',
+                background: Object.keys(errors).length === 0 ? '#2563EB' : '#94a3b8',
+                color: '#fff',
+                fontWeight: 600,
+                border: 'none',
+                borderRadius: 999,
+                padding: '12px 32px',
+                fontSize: 16,
+                cursor: Object.keys(errors).length === 0 ? 'pointer' : 'not-allowed',
+                marginTop: 8,
+                boxShadow: '0 12px 30px rgba(37, 99, 235, 0.25)',
+                transition: 'background 0.2s, transform 0.2s',
+              }}
+              disabled={Object.keys(errors).length > 0}
+              aria-disabled={Object.keys(errors).length > 0}
+              onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.98)')}
+              onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+              onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+            >
+              Buscar
+            </button>
+          </form>
+
+          {Array.isArray(results) && results.length > 0 && (
+            <div
+              className="filters-bar"
+              aria-label="Filtros adicionales"
+            >
+              <strong style={{ fontSize: 14 }}>Filtros</strong>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}><input type="checkbox" checked={filters.offerOnly} onChange={handleOfferToggle} /> Solo habitaciones con oferta</label>
+              <div style={{ display: 'flex', flexDirection: 'column', fontSize: 14 }}><label htmlFor="filter-max-price">Precio máximo por noche</label><input id="filter-max-price" type="number" min={0} value={filters.maxPrice} onChange={handleMaxPriceChange} placeholder="Ej: 300" style={{ width: 120, borderRadius: 8, border: '1px solid #cbd5f5', padding: 6, marginTop: 4 }} /></div>
+              {filterTouched && showFilteredNoResults && (
+                <span style={{ fontSize: 13, color: '#64748b' }}>No hay habitaciones que cumplan con los filtros actuales.</span>
+              )}
+            </div>
+          )}
+
+          {apiError && (
+            <div style={{ color: '#DC2626', margin: '16px 0', fontWeight: 500 }} aria-live="polite">
+              {apiError} <button onClick={() => setApiError("")} style={{ marginLeft: 8, background: 'none', border: 'none', color: '#2563EB', cursor: 'pointer' }}>Reintentar</button>
+            </div>
+          )}
+
+          {loading && (
+            <div className="results-grid" style={{ minHeight: 220 }}>
+              {[1, 2].map((i) => (
+                <div key={i} style={{ background: '#fff', borderRadius: 16, boxShadow: '0 2px 8px #0001', padding: 20, minHeight: 220 }}>
+                  <div style={{ background: '#e5e7eb', height: 120, borderRadius: 12, marginBottom: 16 }} />
+                  <div style={{ background: '#e5e7eb', height: 20, width: '60%', borderRadius: 6, marginBottom: 8 }} />
+                  <div style={{ background: '#e5e7eb', height: 16, width: '40%', borderRadius: 6, marginBottom: 8 }} />
+                  <div style={{ background: '#e5e7eb', height: 16, width: '80%', borderRadius: 6 }} />
                 </div>
               ))}
             </div>
-          ))}
-        </div>
-      )}
+          )}
 
-      {showFilteredNoResults && (
-        <div style={{ textAlign: 'center', color: '#64748b', marginTop: 48, fontSize: 20 }}>
-          <span role="img" aria-label="Sin resultados" style={{ fontSize: 40 }}>🔍</span><br />
-          No se encontraron habitaciones disponibles para los criterios seleccionados
-        </div>
-      )}
+          {Array.isArray(filteredResults) && filteredResults.length > 0 && (
+            <div className="results-grid">
+              {filteredResults.map((hotel, hotelIndex) => (
+                <div key={`${hotel.hotel}-${hotelIndex}`} className="hotel-card">
+                  <div className="hotel-image">
+                    <span role="img" aria-label="Hotel">🏨</span>
+                  </div>
+                  <div style={{ fontWeight: 600, fontSize: 20, marginBottom: 12 }}>{hotel.hotel}</div>
+                  {hotel.rooms.map((room, roomIndex) => (
+                    <div key={`${room.name}-${roomIndex}`} className="room-card">
+                      <div style={{ fontWeight: 600, fontSize: 16 }}>{room.name}</div>
+                      <div style={{ fontSize: 14, color: '#475569' }}>Tipo: {room.type}</div>
+                      <div style={{ fontSize: 14, color: '#475569' }}>Capacidad: {room.capacity}</div>
+                      <div style={{ fontSize: 14, color: '#047857', fontWeight: 600 }}>Estado: {room.state}</div>
+                      <div style={{ fontSize: 14, marginTop: 6 }}>Precio por noche: <strong>{formatCurrency(room.price_per_night)}</strong></div>
+                      <div style={{ fontSize: 13, color: '#64748b' }}>Total para {nights} noche{nights !== 1 ? 's' : ''}: {formatCurrency(room.price)}</div>
+                      {room.offer && <div style={{ background: '#16A34A', color: '#fff', borderRadius: 8, padding: '2px 8px', fontSize: 12, display: 'inline-block', marginTop: 6 }}>Oferta: {room.offer}</div>}
+                      <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
+                        <button
+                          style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 20px', fontWeight: 600, cursor: 'pointer', fontSize: 15 }}
+                          onClick={() => {
+                            setSelectedHotel(hotel);
+                            setSelectedRoom({ ...room, price: room.price, price_per_night: room.price_per_night });
+                            setModalOpen(true);
+                          }}
+                        >Reservar</button>
+                        <button
+                          style={{ background: '#fff', color: '#2563EB', border: '1.5px solid #2563EB', borderRadius: 8, padding: '8px 20px', fontWeight: 600, cursor: 'pointer', fontSize: 15 }}
+                          onClick={() => {
+                            setRoomsHotelName(hotel.hotel);
+                            setRoomsModalOpen(true);
+                          }}
+                        >Ver</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
 
-      {Array.isArray(results) && results.length === 0 && !apiError && !loading && !filterTouched && (
-        <div style={{ textAlign: 'center', color: '#64748b', marginTop: 48, fontSize: 20 }}>
-          <span role="img" aria-label="Sin resultados" style={{ fontSize: 40 }}>🔍</span><br />
-          No se encontraron habitaciones disponibles para los criterios seleccionados
-        </div>
-      )}
+          {showFilteredNoResults && (
+            <div style={{ textAlign: 'center', color: '#64748b', marginTop: 48, fontSize: 20 }}>
+              <span role="img" aria-label="Sin resultados" style={{ fontSize: 40 }}>🔍</span><br />
+              No se encontraron habitaciones disponibles para los criterios seleccionados
+            </div>
+          )}
 
+          {Array.isArray(results) && results.length === 0 && !apiError && !loading && !filterTouched && (
+            <div style={{ textAlign: 'center', color: '#64748b', marginTop: 48, fontSize: 20 }}>
+              <span role="img" aria-label="Sin resultados" style={{ fontSize: 40 }}>🔍</span><br />
+              No se encontraron habitaciones disponibles para los criterios seleccionados
+            </div>
+          )}
         </div>
-        <div style={{ position: 'sticky', top: 24 }}>
+        <aside className="search-sidebar">
           <ReceptionPanel />
-        </div>
+        </aside>
       </div>
-
       {modalOpen && selectedHotel && selectedRoom && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.25)', zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: '#fff', borderRadius: 16, padding: 32, minWidth: 420, maxWidth: 600, boxShadow: '0 4px 24px #0002', position: 'relative' }}>

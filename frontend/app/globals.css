@@ -43,3 +43,135 @@ a {
     color-scheme: dark;
   }
 }
+
+
+.app-shell {
+  max-width: 1180px;
+  margin: 2rem auto;
+  padding: 24px;
+  background: #ffffff;
+  min-height: 100vh;
+  color: #111111;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.search-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.75fr) minmax(280px, 1fr);
+  gap: 24px;
+  align-items: flex-start;
+  margin-top: 16px;
+}
+
+.search-main {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.search-sidebar {
+  position: sticky;
+  top: 24px;
+}
+
+.search-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px 20px;
+  background: #f8fafc;
+  border-radius: 20px;
+  border: 1px solid #e2e8f0;
+  padding: 24px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+}
+
+.filters-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 12px 16px;
+}
+
+.results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 24px;
+}
+
+.hotel-card {
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  color: #111111;
+  gap: 12px;
+}
+
+.hotel-image {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #cbd5e1;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  font-size: 28px;
+}
+
+.room-card {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.room-card:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+@media (max-width: 1024px) {
+  .search-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+
+  .search-sidebar {
+    position: static;
+    width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-shell {
+    padding: 16px;
+  }
+
+  .search-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .filters-bar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .filters-bar {
+    gap: 8px;
+  }
+
+  .search-form {
+    border-radius: 16px;
+    padding: 20px;
+  }
+}
