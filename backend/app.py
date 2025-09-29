@@ -447,3 +447,9 @@ def home():
 if __name__ == '__main__':
     app.run(debug=True)
 
+try:
+    @app.get("/api/health")
+    def health():
+        return {"ok": True}
+except Exception:
+    pass
