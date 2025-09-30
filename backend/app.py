@@ -6,16 +6,7 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-CORS(
-    app,
-    resources={r"/api/*": {"origins": [
-        "https://dream-stay-app.vercel.app",   
-        "https://*.vercel.app"                 
-    ],
-    "methods": ["GET","POST","PUT","DELETE","OPTIONS"],
-    "allow_headers": ["Content-Type","Authorization"]}},
-    supports_credentials=True
-)
+CORS(app)
 
 @app.get("/api/health")
 def health():
