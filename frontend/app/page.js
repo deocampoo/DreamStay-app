@@ -1,9 +1,11 @@
-﻿"use client";
+"use client";
 import React, { useState, useEffect, useMemo } from "react";
 import GuestFormModal from "./GuestFormModal";
 import ReceptionPanel from "./ReceptionPanel";
 
 const CITIES = ["Buenos Aires", "Mar del Plata"];
+
+const CITY_REGEX = /^[\p{L}0-9 ]+$/u;
 
 const ROOM_TYPES = [
   { value: "Single", label: "Single" },
@@ -12,11 +14,17 @@ const ROOM_TYPES = [
   { value: "Todos", label: "Todas" },
 ];
 
+const HOTEL_ICON = String.fromCodePoint(0x1f3e8);
+const SEARCH_ICON = String.fromCodePoint(0x1f50d);
+
 const CAPACITY = {
   Single: { adults: 1, children: 0, babies: 0 },
   Doble: { adults: 2, children: 1, babies: 0 },
   Suite: { adults: 3, children: 2, babies: 1 },
 };
+
+
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000").replace(/\/$/, "");
 
 const INITIAL_FILTERS = { offerOnly: false, maxPrice: "" };
 
@@ -58,12 +66,27 @@ function calculateNights(checkin, checkout) {
   return diff > 0 ? diff : 1;
 }
 
+function formatCapacityLabel(capacity) {
+  if (!capacity) return "";
+  const parts = [];
+  if (capacity.adults) {
+    parts.push(`${capacity.adults} adulto${capacity.adults !== 1 ? 's' : ''}`);
+  }
+  if (capacity.children) {
+    parts.push(`${capacity.children} niño${capacity.children !== 1 ? 's' : ''}`);
+  }
+  if (capacity.babies) {
+    parts.push(`${capacity.babies} bebé${capacity.babies !== 1 ? 's' : ''}`);
+  }
+  return parts.join(' + ');
+}
+
 function validateForm(form) {
   const errors = {};
   if (!form.city.trim()) {
     errors.city = "La ciudad es obligatoria.";
-  } else if (!/^[A-Za-z0-9 ]+$/.test(form.city)) {
-    errors.city = "La ciudad solo admite caracteres alfanumericos y espacios.";
+  } else if (!CITY_REGEX.test(form.city)) {
+    errors.city = "La ciudad solo admite letras, números y espacios.";
   }
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -170,6 +193,7 @@ export default function Home() {
     setFilters(INITIAL_FILTERS);
     setFilterTouched(false);
     try {
+      const tzOffset = new Date().getTimezoneOffset();
       const params = new URLSearchParams({
         city: form.city,
         from: form.checkin,
@@ -178,14 +202,46 @@ export default function Home() {
         adults: form.adults,
         children: form.children,
         babies: form.babies,
+        tzOffset: tzOffset,
       });
-      const response = await fetch(`http://localhost:5000/api/hotels/search?${params.toString()}`);
+      const response = await fetch(`${API_BASE_URL}/api/hotels/search?${params.toString()}`);
       const data = await response.json();
       if (!response.ok) {
-        setApiError(data.errors ? data.errors.join(". ") : data.message || "Error de búsqueda");
+        const message = Array.isArray(data?.errors) ? data.errors.join(". ") : data?.message || "Error de búsqueda";
+        setApiError(message);
         setResults([]);
+      } else if (Array.isArray(data)) {
+        const normalized = data.map((hotel) => ({
+          ...hotel,
+          rooms: Array.isArray(hotel.rooms)
+            ? hotel.rooms.map((room) => {
+                const capacityLabel = room.capacity || formatCapacityLabel(room.capacity_breakdown);
+                return {
+                  ...room,
+                  capacity: capacityLabel,
+                  capacity_breakdown: room.capacity_breakdown || null,
+                };
+              })
+            : [],
+        }));
+        setResults(normalized);
+      } else if (Array.isArray(data?.results)) {
+        const normalized = data.results.map((hotel) => ({
+          ...hotel,
+          rooms: Array.isArray(hotel.rooms)
+            ? hotel.rooms.map((room) => {
+                const capacityLabel = room.capacity || formatCapacityLabel(room.capacity_breakdown);
+                return {
+                  ...room,
+                  capacity: capacityLabel,
+                  capacity_breakdown: room.capacity_breakdown || null,
+                };
+              })
+            : [],
+        }));
+        setResults(normalized);
       } else {
-        setResults(data);
+        setResults([]);
       }
     } catch (error) {
       setApiError("Error de conexión con el backend");
@@ -444,9 +500,12 @@ export default function Home() {
               {filteredResults.map((hotel, hotelIndex) => (
                 <div key={`${hotel.hotel}-${hotelIndex}`} className="hotel-card">
                   <div className="hotel-image">
-                    <span role="img" aria-label="Hotel">🏨</span>
+                    <span role="img" aria-label="Hotel">{HOTEL_ICON}</span>
                   </div>
                   <div style={{ fontWeight: 600, fontSize: 20, marginBottom: 12 }}>{hotel.hotel}</div>
+                  {Array.isArray(hotel.offers) && hotel.offers.length > 0 && (
+                    <div style={{ fontSize: 13, color: '#047857', fontWeight: 500 }}>Ofertas: {hotel.offers.join(', ')}</div>
+                  )}
                   {hotel.rooms.map((room, roomIndex) => (
                     <div key={`${room.name}-${roomIndex}`} className="room-card">
                       <div style={{ fontWeight: 600, fontSize: 16 }}>{room.name}</div>
@@ -482,14 +541,14 @@ export default function Home() {
 
           {showFilteredNoResults && (
             <div style={{ textAlign: 'center', color: '#64748b', marginTop: 48, fontSize: 20 }}>
-              <span role="img" aria-label="Sin resultados" style={{ fontSize: 40 }}>🔍</span><br />
+              <span role="img" aria-label="Sin resultados" style={{ fontSize: 40 }}>{SEARCH_ICON}</span><br />
               No se encontraron habitaciones disponibles para los criterios seleccionados
             </div>
           )}
 
           {Array.isArray(results) && results.length === 0 && !apiError && !loading && !filterTouched && (
             <div style={{ textAlign: 'center', color: '#64748b', marginTop: 48, fontSize: 20 }}>
-              <span role="img" aria-label="Sin resultados" style={{ fontSize: 40 }}>🔍</span><br />
+              <span role="img" aria-label="Sin resultados" style={{ fontSize: 40 }}>{SEARCH_ICON}</span><br />
               No se encontraron habitaciones disponibles para los criterios seleccionados
             </div>
           )}
@@ -540,3 +599,4 @@ export default function Home() {
     </div>
   );
 }
+

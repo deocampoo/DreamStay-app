@@ -1,12 +1,15 @@
-﻿"use client";
+"use client";
 import React, { useState, useMemo } from "react";
 
-const NAME_REGEX = /^[A-Za-zÁÉÍÓÚáéíóúÑñ ]+$/;
+const NAME_REGEX = /^[\p{L} ]+$/u;
 const CAPACITY = {
   Single: { adults: 1, children: 0, babies: 0 },
   Doble: { adults: 2, children: 1, babies: 0 },
   Suite: { adults: 3, children: 2, babies: 1 },
 };
+
+
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000").replace(/\/$/, "");
 
 function parseBirth(value) {
   if (!value) return null;
@@ -178,7 +181,7 @@ export default function GuestFormModal({ hotel, room, checkin, checkout, onClose
         name: guest.name.trim(),
         birth: formatToDMY(guest.birth),
       }));
-      const response = await fetch("http://localhost:5000/api/reservations", {
+      const response = await fetch(`${API_BASE_URL}/api/reservations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -198,6 +201,7 @@ export default function GuestFormModal({ hotel, room, checkin, checkout, onClose
         setErrors([]);
       }
     } catch (error) {
+      console.error('Error al invocar reservas', error);
       setErrors(["Error de conexión con el backend"]);
     }
 
@@ -335,3 +339,5 @@ export default function GuestFormModal({ hotel, room, checkin, checkout, onClose
     </form>
   );
 }
+
+

@@ -1,4 +1,6 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000").replace(/\/$/, "");
+const HOTEL_EMOJI = String.fromCodePoint(0x1f3e8);
 
 export default function ReceptionPanel() {
   const [code, setCode] = useState("");
@@ -13,7 +15,7 @@ export default function ReceptionPanel() {
     setError("");
     setResult(null);
     try {
-      const response = await fetch(`http://localhost:5000/api/${action}`, {
+      const response = await fetch(`${API_BASE_URL}/api/${action}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirmation_code: code.trim().toUpperCase() })
@@ -26,6 +28,7 @@ export default function ReceptionPanel() {
         setCode("");
       }
     } catch (err) {
+      console.error('ReceptionPanel error', err);
       setError("Error de conexión con el backend");
     }
     setLoading(false);
@@ -45,7 +48,7 @@ export default function ReceptionPanel() {
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600, color: "#111827" }}>Panel de Recepción</h2>
-        <span style={{ fontSize: 24 }}>🛎️</span>
+        <span style={{ fontSize: 24 }}>{HOTEL_EMOJI}</span>
       </div>
       <p style={{ margin: 0, fontSize: 14, color: "#64748b" }}>
         Gestioná los check-in y check-out ingresando el código de confirmación de la reserva.
@@ -113,3 +116,4 @@ export default function ReceptionPanel() {
     </div>
   );
 }
+
