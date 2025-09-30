@@ -8,11 +8,6 @@ app = Flask(__name__)
 
 CORS(app)
 
-@app.get("/api/health")
-def health():
-    return jsonify(ok=True)
-
-
 # Datos simulados de hoteles y habitaciones
 hotels = [
     {
