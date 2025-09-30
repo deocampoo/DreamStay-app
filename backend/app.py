@@ -17,6 +17,10 @@ CORS(
     supports_credentials=True
 )
 
+@app.get("/api/health")
+def health():
+    return jsonify(ok=True)
+
 
 # Datos simulados de hoteles y habitaciones
 hotels = [
