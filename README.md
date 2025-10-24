@@ -9,20 +9,17 @@ Garantizar calidad desde el inicio, maximizando cobertura y velocidad de validac
 
 Flujo de trabajo
 
-Historias de usuario (con criterios de aceptación).
+1.Historias de usuario (con criterios de aceptación).
 
-Implementación por IA a partir de esas historias.
+2.Implementación por IA a partir de esas historias.
 
-Diseño de casos de prueba trazados a cada historia.
+3.Diseño de casos de prueba trazados a cada historia.
 
-Ejecución de pruebas (funcionales y de aceptación).
+4.Ejecución de pruebas (funcionales y de aceptación).
 
-Reportes:
+5.Reportes:
 
-Reporte de ejecución (resultados por caso).
+-Reporte de ejecución (resultados por caso).
 
-Reporte de defectos (registro, severidad y seguimiento).
+-Reporte de defectos (registro, severidad y seguimiento).
 
-Re-test y verificación tras las correcciones.
-
-Trazabilidad: Historia de Usuario → Criterios de Aceptación → Casos de Prueba → Resultados/Defectos.
