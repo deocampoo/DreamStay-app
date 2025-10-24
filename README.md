@@ -1,6 +1,7 @@
 DreamStay-app — Proyecto de Testing con IA
 
 Descripción breve
+
 DreamStay-app es una aplicación de reservas de hoteles cuyo desarrollo delegamos en un agente de inteligencia artificial para concentrar el trabajo del equipo en aseguramiento de calidad (QA). Nuestro proceso parte de historias de usuario, que la IA utiliza para implementar las funcionalidades; luego diseñamos y ejecutamos pruebas y documentamos resultados y defectos.
 
 Objetivo
