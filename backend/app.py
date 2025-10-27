@@ -477,6 +477,60 @@ def make_reservation():
     return jsonify(reservation)
 
 
+@app.route("/api/price-preview", methods=["POST", "OPTIONS"])
+def price_preview():
+    if request.method == "OPTIONS":
+        return "", 204
+
+    data = request.json or {}
+    hotel_name = str(data.get("hotel", "")).strip()
+    room_type = data.get("room_type")
+    if not hotel_name or not room_type:
+        return jsonify({"error": "Hotel y tipo de habitación son obligatorios"}), 400
+
+    hotel, room = get_room(hotel_name, room_type)
+    if not hotel or not room:
+        return jsonify({"error": "Hotel o tipo de habitación inválido"}), 400
+
+    d_checkin = parse_date(data.get("checkin"))
+    d_checkout = parse_date(data.get("checkout"))
+    if not d_checkin or not d_checkout or d_checkout <= d_checkin:
+        return jsonify({"error": "Fechas inválidas"}), 400
+
+    counts_payload = data.get("counts") or {}
+    try:
+        adult_count = int(counts_payload.get("adult", 0))
+        child_count = int(counts_payload.get("child", 0))
+        baby_count = int(counts_payload.get("baby", 0))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Los conteos de huéspedes deben ser números enteros"}), 400
+
+    if adult_count < 1:
+        return jsonify({"error": "Debe haber al menos un adulto en la reserva"}), 400
+    if child_count < 0 or baby_count < 0:
+        return jsonify({"error": "Los conteos no pueden ser negativos"}), 400
+
+    capacity = room["capacity"]
+    if (
+        adult_count > capacity["adults"]
+        or child_count > capacity["children"]
+        or baby_count > capacity["babies"]
+    ):
+        return jsonify({"error": "La cantidad de huéspedes excede la capacidad de la habitación seleccionada"}), 400
+
+    counts = normalize_counts(adult_count, child_count, baby_count)
+    nights = max((d_checkout - d_checkin).days, 1)
+    hotel_active_offers = get_active_offers(hotel, d_checkin, d_checkout)
+    price_detail, applied_offers = calculate_price(room, counts, nights, hotel_active_offers)
+
+    return jsonify(
+        {
+            "price_detail": price_detail,
+            "offer": ", ".join(applied_offers) if applied_offers else None,
+        }
+    )
+
+
 @app.route("/api/checkin", methods=["POST", "OPTIONS"])
 def checkin():
     if request.method == "OPTIONS":

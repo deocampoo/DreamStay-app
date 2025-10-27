@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 
 const NAME_REGEX = /^[\p{L} ]+$/u;
 const CAPACITY = {
@@ -76,7 +76,7 @@ function getCategoryLabel(category) {
   return "Sin clasificar";
 }
 
-export default function GuestFormModal({ hotel, room, checkin, checkout, onClose }) {
+export default function GuestFormModal({ hotel, room, checkin, checkout, onClose, onReservationConfirmed, onPricePreview }) {
   const [guests, setGuests] = useState([{ name: "", birth: "" }]);
   const [errors, setErrors] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -85,7 +85,8 @@ export default function GuestFormModal({ hotel, room, checkin, checkout, onClose
   const capacity = useMemo(() => CAPACITY[room?.type] || CAPACITY.Single, [room?.type]);
   const totalCapacity = capacity.adults + capacity.children + capacity.babies;
 
-  const guestInfos = useMemo(() => guests.map(getGuestInfo), [guests]);
+  const birthSignature = useMemo(() => guests.map((guest) => guest.birth).join("|"), [guests]);
+  const guestInfos = useMemo(() => guests.map(getGuestInfo), [birthSignature]);
   const summary = useMemo(() => {
     const totals = { adult: 0, child: 0, baby: 0 };
     guestInfos.forEach((info) => {
@@ -95,6 +96,76 @@ export default function GuestFormModal({ hotel, room, checkin, checkout, onClose
     });
     return totals;
   }, [guestInfos]);
+
+  const summarySignature = `${summary.adult}-${summary.child}-${summary.baby}`;
+  const roomSignature = `${hotel?.hotel || hotel?.name || ""}|${room?.name || ""}|${room?.type || ""}`;
+  const onPricePreviewRef = useRef(onPricePreview);
+
+  useEffect(() => {
+    onPricePreviewRef.current = onPricePreview;
+  }, [onPricePreview]);
+
+  useEffect(() => {
+    const publishPreview = (value) => {
+      if (typeof onPricePreviewRef.current === "function") {
+        onPricePreviewRef.current(value);
+      }
+    };
+    if (confirmation) {
+      return;
+    }
+    if (!hotel || !room || !checkin || !checkout) {
+      publishPreview(null);
+      return;
+    }
+    const allAgesKnown = guestInfos.every((info) => info.age !== null && !info.isFuture);
+    const exceedsCapacity =
+      summary.adult > capacity.adults || summary.child > capacity.children || summary.baby > capacity.babies;
+    if (!allAgesKnown || summary.adult < 1 || exceedsCapacity) {
+      publishPreview(null);
+      return;
+    }
+    const controller = new AbortController();
+    const payload = {
+      hotel: hotel.hotel || hotel.name,
+      room_type: room.type,
+      checkin,
+      checkout,
+      counts: summary,
+    };
+    const fetchPreview = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/price-preview`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          throw new Error("preview");
+        }
+        const data = await response.json();
+        publishPreview(data.price_detail || null);
+      } catch (error) {
+        if (error.name === "AbortError") return;
+        publishPreview(null);
+      }
+    };
+    fetchPreview();
+    return () => {
+      controller.abort();
+    };
+  }, [
+    roomSignature,
+    checkin,
+    checkout,
+    summarySignature,
+    birthSignature,
+    capacity.adults,
+    capacity.children,
+    capacity.babies,
+    confirmation,
+  ]);
 
   const validate = () => {
     const validationErrors = [];
@@ -197,6 +268,9 @@ export default function GuestFormModal({ hotel, room, checkin, checkout, onClose
         const serverErrors = data.errors || (data.error ? [data.error] : [data.message || "Error de reserva"]);
         setErrors(serverErrors);
       } else {
+        if (typeof onReservationConfirmed === "function") {
+          onReservationConfirmed(data);
+        }
         setConfirmation(data);
         setErrors([]);
       }

@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import GuestFormModal from "./GuestFormModal";
 import ReceptionPanel from "./ReceptionPanel";
 
@@ -81,6 +81,23 @@ function formatCapacityLabel(capacity) {
   return parts.join(' + ');
 }
 
+function priceDetailsEqual(a, b) {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  const normalize = (value) => Number(value ?? 0).toFixed(2);
+  const compareKeys = (objA = {}, objB = {}, keys = []) =>
+    keys.every((key) => normalize(objA[key]) === normalize(objB[key]));
+  const sameCounts = compareKeys(a.counts, b.counts, ["adult", "child", "baby"]);
+  const sameRates = compareKeys(a.per_night, b.per_night, ["adult", "child", "baby"]);
+  return (
+    sameCounts &&
+    sameRates &&
+    normalize(a.subtotal_per_night) === normalize(b.subtotal_per_night) &&
+    normalize(a.total) === normalize(b.total) &&
+    normalize(a.nights) === normalize(b.nights)
+  );
+}
+
 function validateForm(form) {
   const errors = {};
   if (!form.city.trim()) {
@@ -145,10 +162,123 @@ export default function Home() {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedHotel, setSelectedHotel] = useState(null);
   const [selectedRoom, setSelectedRoom] = useState(null);
+  const [confirmedReservation, setConfirmedReservation] = useState(null);
+  const [pricePreviewDetail, setPricePreviewDetail] = useState(null);
   const [roomsModalOpen, setRoomsModalOpen] = useState(false);
   const [roomsHotelName, setRoomsHotelName] = useState("");
 
   const [citySuggestions, setCitySuggestions] = useState([]);
+
+  const adjustRoomPrices = useCallback(
+    (detail, persistBase = false) => {
+      if (!selectedHotel || !selectedRoom) return;
+
+      const applyToList = (list) => {
+        if (!Array.isArray(list)) return list;
+        return list.map((hotel) => {
+          if (hotel.hotel !== selectedHotel.hotel) return hotel;
+          return {
+            ...hotel,
+            rooms: hotel.rooms.map((roomItem) => {
+              if (roomItem.name !== selectedRoom.name || roomItem.type !== selectedRoom.type) {
+                return roomItem;
+              }
+              const basePerNight = roomItem.base_price_per_night ?? roomItem.price_per_night;
+              const baseTotal = roomItem.base_price_total ?? roomItem.price;
+              const baseDetail = roomItem.base_price_detail ?? roomItem.price_detail ?? null;
+
+              if (!detail) {
+                if (
+                  roomItem.price_per_night === basePerNight &&
+                  roomItem.price === baseTotal &&
+                  priceDetailsEqual(roomItem.price_detail, baseDetail)
+                ) {
+                  return roomItem;
+                }
+                return {
+                  ...roomItem,
+                  price_per_night: basePerNight,
+                  price: baseTotal,
+                  price_detail: baseDetail,
+                };
+              }
+
+              if (priceDetailsEqual(roomItem.price_detail, detail)) {
+                return roomItem;
+              }
+
+              const updatedRoom = {
+                ...roomItem,
+                price_per_night: detail.subtotal_per_night,
+                price: detail.total,
+                price_detail: detail,
+              };
+
+              if (persistBase) {
+                updatedRoom.base_price_per_night = detail.subtotal_per_night;
+                updatedRoom.base_price_total = detail.total;
+                updatedRoom.base_price_detail = detail;
+              }
+
+              return updatedRoom;
+            }),
+          };
+        });
+      };
+
+      setResults((prev) => applyToList(prev));
+      setSelectedRoom((prev) => {
+        if (!prev) return prev;
+        const basePerNight = prev.base_price_per_night ?? prev.price_per_night;
+        const baseTotal = prev.base_price_total ?? prev.price;
+        const baseDetail = prev.base_price_detail ?? prev.price_detail ?? null;
+        if (!detail) {
+          if (
+            prev.price_per_night === basePerNight &&
+            prev.price === baseTotal &&
+            priceDetailsEqual(prev.price_detail, baseDetail)
+          ) {
+            return prev;
+          }
+          return {
+            ...prev,
+            price_per_night: basePerNight,
+            price: baseTotal,
+            price_detail: baseDetail,
+          };
+        }
+        if (priceDetailsEqual(prev.price_detail, detail)) {
+          return prev;
+        }
+        const next = {
+          ...prev,
+          price_per_night: detail.subtotal_per_night,
+          price: detail.total,
+          price_detail: detail,
+        };
+        if (persistBase) {
+          next.base_price_per_night = detail.subtotal_per_night;
+          next.base_price_total = detail.total;
+          next.base_price_detail = detail;
+        }
+        return next;
+      });
+    },
+    [selectedHotel, selectedRoom]
+  );
+
+  const handlePricePreview = useCallback(
+    (detail) => {
+      setPricePreviewDetail((prev) => {
+        if (priceDetailsEqual(prev, detail)) {
+          return prev;
+        }
+        return detail || null;
+      });
+      adjustRoomPrices(detail, false);
+    },
+    [adjustRoomPrices]
+  );
 
   const handleCityChange = (event) => {
     const value = event.target.value;
@@ -159,6 +289,12 @@ export default function Home() {
     } else {
       setCitySuggestions([]);
     }
+  };
+
+  const handleCloseModal = () => {
+    handlePricePreview(null);
+    setModalOpen(false);
+    setConfirmedReservation(null);
   };
 
   const handleChange = (event) => {
@@ -178,6 +314,10 @@ export default function Home() {
   }, [form]);
 
   const nights = useMemo(() => calculateNights(form.checkin, form.checkout), [form.checkin, form.checkout]);
+
+  const modalPriceDetail = confirmedReservation?.price_detail || pricePreviewDetail || selectedRoom?.price_detail;
+  const modalPricePerNight = modalPriceDetail?.subtotal_per_night ?? selectedRoom?.price_per_night ?? null;
+  const modalTotalPrice = modalPriceDetail?.total ?? selectedRoom?.price ?? null;
 
   const handleSearch = async (event) => {
     event.preventDefault();
@@ -220,6 +360,9 @@ export default function Home() {
                   ...room,
                   capacity: capacityLabel,
                   capacity_breakdown: room.capacity_breakdown || null,
+                  base_price_per_night: room.price_per_night,
+                  base_price_total: room.price,
+                  base_price_detail: room.price_detail || null,
                 };
               })
             : [],
@@ -520,7 +663,16 @@ export default function Home() {
                           style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 20px', fontWeight: 600, cursor: 'pointer', fontSize: 15 }}
                           onClick={() => {
                             setSelectedHotel(hotel);
-                            setSelectedRoom({ ...room, price: room.price, price_per_night: room.price_per_night });
+                            setSelectedRoom({
+                              ...room,
+                              price: room.price,
+                              price_per_night: room.price_per_night,
+                              base_price_per_night: room.base_price_per_night ?? room.price_per_night,
+                              base_price_total: room.base_price_total ?? room.price,
+                              base_price_detail: room.base_price_detail ?? room.price_detail ?? null,
+                            });
+                            setConfirmedReservation(null);
+                            setPricePreviewDetail(null);
                             setModalOpen(true);
                           }}
                         >Reservar</button>
@@ -560,22 +712,28 @@ export default function Home() {
       {modalOpen && selectedHotel && selectedRoom && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.25)', zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: '#fff', borderRadius: 16, padding: 32, minWidth: 420, maxWidth: 600, boxShadow: '0 4px 24px #0002', position: 'relative' }}>
-            <button onClick={() => setModalOpen(false)} style={{ position: 'absolute', top: 16, right: 20, background: 'none', border: 'none', fontSize: 26, color: '#64748b', cursor: 'pointer' }} aria-label="Cerrar">×</button>
+            <button onClick={handleCloseModal} style={{ position: 'absolute', top: 16, right: 20, background: 'none', border: 'none', fontSize: 26, color: '#64748b', cursor: 'pointer' }} aria-label="Cerrar">×</button>
             <div style={{ fontWeight: 600, fontSize: 22, marginBottom: 18 }}>Reserva de habitación</div>
             <div style={{ marginBottom: 16 }}>
               <div><b>Hotel:</b> {selectedHotel.hotel}</div>
               <div><b>Habitación:</b> {selectedRoom.name || selectedRoom.type}</div>
               <div><b>Tipo:</b> {selectedRoom.type}</div>
               <div><b>Capacidad:</b> {selectedRoom.capacity}</div>
-              <div><b>Precio por noche:</b> {formatCurrency(selectedRoom.price_per_night)}</div>
-              <div><b>Total:</b> {formatCurrency(selectedRoom.price)}</div>
+              <div><b>Precio por noche:</b> {modalPricePerNight != null ? formatCurrency(modalPricePerNight) : "-"}</div>
+              <div><b>Total:</b> {modalTotalPrice != null ? formatCurrency(modalTotalPrice) : "-"}</div>
             </div>
             <GuestFormModal
               hotel={selectedHotel}
               room={selectedRoom}
               checkin={form.checkin}
               checkout={form.checkout}
-              onClose={() => setModalOpen(false)}
+              onClose={handleCloseModal}
+              onReservationConfirmed={(reservation) => {
+                setConfirmedReservation(reservation);
+                setPricePreviewDetail(null);
+                adjustRoomPrices(reservation.price_detail, true);
+              }}
+              onPricePreview={handlePricePreview}
             />
           </div>
         </div>
