@@ -88,6 +88,7 @@ hotels = [
 
 CITY_REGEX = re.compile(r"^[0-9A-Za-z\u00c0-\u00ff ]+$")
 NAME_REGEX = re.compile(r"^[A-Za-z\u00c0-\u00ff ]+$")
+EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 def is_valid_city(city: str) -> bool:
@@ -96,6 +97,10 @@ def is_valid_city(city: str) -> bool:
 
 def is_valid_name(name: str) -> bool:
     return bool(NAME_REGEX.fullmatch(name))
+
+
+def is_valid_email(value: str) -> bool:
+    return bool(EMAIL_REGEX.fullmatch(value or ""))
 
 
 def parse_date(date_str):
@@ -374,6 +379,11 @@ def make_reservation():
         return "", 204
 
     data = request.json or {}
+    contact_email_raw = str(data.get("contact_email", "")).strip()
+    if not contact_email_raw:
+        return jsonify({"error": "El correo electronico de contacto es obligatorio"}), 400
+    if not is_valid_email(contact_email_raw):
+        return jsonify({"error": "El correo electronico de contacto tiene un formato invalido"}), 400
     required_fields = ["hotel", "room_type", "checkin", "checkout", "guests"]
     for field in required_fields:
         if field not in data:
@@ -461,6 +471,7 @@ def make_reservation():
         "hotel": hotel_name,
         "room_type": room_type,
         "room_name": room.get("name", room_type),
+        "contact_email": contact_email_raw,
         "checkin": format_date_output(d_checkin),
         "checkout": format_date_output(d_checkout),
         "guests": processed_guests,
@@ -475,6 +486,42 @@ def make_reservation():
 
     reservations.append(reservation)
     return jsonify(reservation)
+
+
+@app.route("/api/reservations/search", methods=["POST", "OPTIONS"])
+def search_reservation():
+    if request.method == "OPTIONS":
+        return "", 204
+
+    data = request.json or {}
+    code = str(data.get("code", "")).strip().upper()
+    email_raw = str(data.get("email", "")).strip()
+    email_normalized = email_raw.lower()
+
+    if not code:
+        return jsonify({"error": "El codigo de reserva es obligatorio"}), 400
+    if not email_raw:
+        return jsonify({"error": "El correo electronico es obligatorio"}), 400
+    if not is_valid_email(email_raw):
+        return jsonify({"error": "El correo electronico tiene un formato invalido"}), 400
+
+    reservation = next(
+        (
+            res
+            for res in reservations
+            if res["confirmation_code"] == code
+            and str(res.get("contact_email", "")).strip().lower() == email_normalized
+        ),
+        None,
+    )
+
+    if not reservation:
+        return jsonify(
+            {"error": "No se encontro una reserva asociada a los datos ingresados."}
+        ), 404
+
+    response_payload = reservation.copy()
+    return jsonify({"reservation": response_payload})
 
 
 @app.route("/api/price-preview", methods=["POST", "OPTIONS"])

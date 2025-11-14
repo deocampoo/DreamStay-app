@@ -1,11 +1,13 @@
 "use client";
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import GuestFormModal from "./GuestFormModal";
 import ReceptionPanel from "./ReceptionPanel";
+import ReservationSummaryCard from "./ReservationSummaryCard";
 
 const CITIES = ["Buenos Aires", "Mar del Plata"];
 
 const CITY_REGEX = /^[\p{L}0-9 ]+$/u;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const ROOM_TYPES = [
   { value: "Single", label: "Single" },
@@ -168,6 +170,22 @@ export default function Home() {
   const [roomsHotelName, setRoomsHotelName] = useState("");
 
   const [citySuggestions, setCitySuggestions] = useState([]);
+  const [activeReservation, setActiveReservation] = useState(null);
+  const [lookupForm, setLookupForm] = useState({ code: "", email: "" });
+  const [lookupErrors, setLookupErrors] = useState({});
+  const [lookupFeedback, setLookupFeedback] = useState({ type: "", text: "" });
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const summaryRef = useRef(null);
+
+  useEffect(() => {
+    if (activeReservation && summaryRef.current) {
+      try {
+        summaryRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch (error) {
+        // scrollIntoView no disponible (SSR) - ignorar
+      }
+    }
+  }, [activeReservation]);
 
   const adjustRoomPrices = useCallback(
     (detail, persistBase = false) => {
@@ -425,6 +443,102 @@ export default function Home() {
     setFilterTouched(true);
   };
 
+  const handleLookupChange = (field) => (event) => {
+    const value = field === "code" ? event.target.value.toUpperCase() : event.target.value;
+    setLookupForm((prev) => ({ ...prev, [field]: value }));
+    setLookupErrors((prev) => ({ ...prev, [field]: "" }));
+    setLookupFeedback({ type: "", text: "" });
+  };
+
+  const persistActiveReservation = useCallback((reservation, feedbackMessage = "") => {
+    if (!reservation) return;
+    setActiveReservation(reservation);
+    setLookupForm((prev) => ({
+      code: reservation.confirmation_code || prev.code,
+      email: reservation.contact_email || reservation.email || prev.email,
+    }));
+    if (feedbackMessage) {
+      setLookupFeedback({ type: "success", text: feedbackMessage });
+    }
+  }, []);
+
+  const validateLookupForm = useCallback(() => {
+    const validation = {};
+    if (!lookupForm.code.trim()) {
+      validation.code = "El código es obligatorio.";
+    }
+    const trimmedEmail = lookupForm.email.trim();
+    if (!trimmedEmail) {
+      validation.email = "El correo es obligatorio.";
+    } else if (!EMAIL_REGEX.test(trimmedEmail)) {
+      validation.email = "Ingresa un correo válido.";
+    }
+    return validation;
+  }, [lookupForm]);
+
+  const handleReservationLookup = async (event) => {
+    event.preventDefault();
+    const validation = validateLookupForm();
+    setLookupErrors(validation);
+    if (Object.keys(validation).length > 0) {
+      setLookupFeedback({ type: "error", text: "Completa los datos para buscar tu reserva." });
+      return;
+    }
+    setLookupLoading(true);
+    setLookupFeedback({ type: "", text: "" });
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/reservations/search`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: lookupForm.code.trim().toUpperCase(),
+          email: lookupForm.email.trim(),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setActiveReservation(null);
+        setLookupFeedback({
+          type: "error",
+          text: data.error || "No se encontr\u00F3 una reserva asociada a los datos ingresados.",
+        });
+      } else {
+        const reservationPayload = data.reservation || data;
+        persistActiveReservation(
+          reservationPayload,
+          "Reserva encontrada. Revisa el resumen a continuacion."
+        );
+      }
+    } catch (error) {
+      setActiveReservation(null);
+      setLookupFeedback({ type: "error", text: "Error de conexion con el backend." });
+    }
+    setLookupLoading(false);
+  };
+
+  const handleLookupAction = useCallback((actionKey) => {
+    const actionMessages = {
+      pay: "El pago online estara disponible en la proxima iteracion.",
+      modify: "La modificacion de reserva estara habilitada pronto.",
+      cancel: "La cancelacion online estara disponible en la HU correspondiente.",
+      checkout: "El check-out desde la app estara disponible para ocupaciones altas.",
+    };
+    setLookupFeedback({
+      type: "info",
+      text: actionMessages[actionKey] || "Esta accion estara disponible proximamente.",
+    });
+  }, []);
+
+  const reservationActions = useMemo(
+    () => ({
+      pay: () => handleLookupAction("pay"),
+      modify: () => handleLookupAction("modify"),
+      cancel: () => handleLookupAction("cancel"),
+      checkout: () => handleLookupAction("checkout"),
+    }),
+    [handleLookupAction]
+  );
+
   return (
     <div className="app-shell">
       <nav style={{ marginBottom: 16, color: '#6b7280', fontSize: 14 }} aria-label="breadcrumb">
@@ -605,6 +719,110 @@ export default function Home() {
             </button>
           </form>
 
+          <section
+            aria-label="Buscar reserva existente"
+            style={{
+              marginTop: 24,
+              padding: 20,
+              borderRadius: 18,
+              background: "#fff",
+              border: "1px solid #e2e8f0",
+              boxShadow: "0 10px 30px rgba(15,23,42,0.05)",
+            }}
+          >
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>¿Ya tenés una reserva?</h2>
+            <p style={{ marginTop: 6, fontSize: 14, color: "#475569" }}>
+              Ingresá tu código y correo para recuperar el resumen sin salir de esta pantalla.
+            </p>
+            <form onSubmit={handleReservationLookup} style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                <div style={{ flex: "1 1 200px", minWidth: 180 }}>
+                  <label htmlFor="lookup-code" style={{ fontWeight: 500, fontSize: 14 }}>Código de reserva</label>
+                  <input
+                    id="lookup-code"
+                    type="text"
+                    value={lookupForm.code}
+                    onChange={handleLookupChange("code")}
+                    placeholder="ABC12345"
+                    style={{ width: "100%", borderRadius: 8, border: lookupErrors.code ? "2px solid #DC2626" : "1px solid #cbd5f5", padding: 10, marginTop: 4 }}
+                    aria-invalid={!!lookupErrors.code}
+                  />
+                  {lookupErrors.code && (
+                    <div style={{ color: "#DC2626", fontSize: 13 }} aria-live="polite">
+                      {lookupErrors.code}
+                    </div>
+                  )}
+                </div>
+                <div style={{ flex: "1 1 240px", minWidth: 200 }}>
+                  <label htmlFor="lookup-email" style={{ fontWeight: 500, fontSize: 14 }}>Correo</label>
+                  <input
+                    id="lookup-email"
+                    type="email"
+                    value={lookupForm.email}
+                    onChange={handleLookupChange("email")}
+                    placeholder="correo@dominio.com"
+                    style={{ width: "100%", borderRadius: 8, border: lookupErrors.email ? "2px solid #DC2626" : "1px solid #cbd5f5", padding: 10, marginTop: 4 }}
+                    aria-invalid={!!lookupErrors.email}
+                  />
+                  {lookupErrors.email && (
+                    <div style={{ color: "#DC2626", fontSize: 13 }} aria-live="polite">
+                      {lookupErrors.email}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div style={{ textAlign: "center" }}>
+                <button
+                  type="submit"
+                  disabled={lookupLoading}
+                  style={{
+                    background: "#0f172a",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 999,
+                    padding: "12px 28px",
+                    fontWeight: 600,
+                    fontSize: 15,
+                    cursor: lookupLoading ? "wait" : "pointer",
+                    minWidth: 200,
+                  }}
+                >
+                  {lookupLoading ? "Buscando..." : "Buscar Reserva"}
+                </button>
+              </div>
+            </form>
+            {lookupFeedback.text && (
+              <div
+                role="status"
+                aria-live="polite"
+                style={{
+                  marginTop: 12,
+                  fontSize: 14,
+                  fontWeight: 500,
+                  textAlign: "center",
+                  color:
+                    lookupFeedback.type === "error"
+                      ? "#DC2626"
+                      : lookupFeedback.type === "success"
+                      ? "#16A34A"
+                      : "#0EA5E9",
+                }}
+              >
+                {lookupFeedback.text}
+              </div>
+            )}
+          </section>
+
+          {activeReservation && (
+            <div ref={summaryRef}>
+              <ReservationSummaryCard
+                reservation={activeReservation}
+                onAction={reservationActions}
+                currencyFormatter={formatCurrency}
+              />
+            </div>
+          )}
+
           {Array.isArray(results) && results.length > 0 && (
             <div
               className="filters-bar"
@@ -732,6 +950,10 @@ export default function Home() {
                 setConfirmedReservation(reservation);
                 setPricePreviewDetail(null);
                 adjustRoomPrices(reservation.price_detail, true);
+                persistActiveReservation(
+                  reservation,
+                  "Reserva confirmada. Revisa el resumen para continuar con el pago o gestionar cambios."
+                );
               }}
               onPricePreview={handlePricePreview}
             />

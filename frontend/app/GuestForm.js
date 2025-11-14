@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function GuestForm({ open, onClose, room }) {
   const [guests, setGuests] = useState([]);
   const [errors, setErrors] = useState([]);
@@ -7,6 +9,7 @@ export default function GuestForm({ open, onClose, room }) {
   const [submitError, setSubmitError] = useState("");
   const [loading, setLoading] = useState(false);
   const [confirmation, setConfirmation] = useState(null);
+  const [contactEmail, setContactEmail] = useState("");
 
   useEffect(() => {
     if (room) {
@@ -78,6 +81,15 @@ export default function GuestForm({ open, onClose, room }) {
       setSubmitError("Debe haber al menos un adulto en la reserva.");
       return;
     }
+    const trimmedEmail = contactEmail.trim();
+    if (!trimmedEmail) {
+      setSubmitError("El correo de contacto es obligatorio.");
+      return;
+    }
+    if (!EMAIL_REGEX.test(trimmedEmail)) {
+      setSubmitError("El correo de contacto debe tener un formato valido.");
+      return;
+    }
     setSubmitError("");
     setLoading(true);
     setConfirmation(null);
@@ -90,7 +102,8 @@ export default function GuestForm({ open, onClose, room }) {
           room_type: room.type,
           checkin: room.checkin || '',
           checkout: room.checkout || '',
-          guests: guests.map(g => ({ name: g.name, birth: g.birth }))
+          guests: guests.map(g => ({ name: g.name, birth: g.birth })),
+          contact_email: trimmedEmail,
         })
       });
       const data = await res.json();
@@ -98,6 +111,7 @@ export default function GuestForm({ open, onClose, room }) {
         setSubmitError(data.errors ? data.errors.join(". ") : data.message || "Error al confirmar reserva");
       } else {
         setConfirmation(data);
+        setContactEmail("");
       }
     } catch (err) {
       setSubmitError("Error de conexión con el backend");
@@ -131,6 +145,19 @@ export default function GuestForm({ open, onClose, room }) {
   const allValid = guests.every((g, i) => !validateGuest(g).name && !validateGuest(g).birth && g.name && g.birth);
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 360 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <label htmlFor="contact-email-inline" style={{ fontWeight: 600, fontSize: 14 }}>Correo de contacto</label>
+        <input
+          id="contact-email-inline"
+          type="email"
+          value={contactEmail}
+          onChange={(event) => setContactEmail(event.target.value)}
+          placeholder="tucorreo@ejemplo.com"
+          style={{ borderRadius: 8, border: '1px solid #cbd5f5', padding: 10 }}
+          required
+        />
+        <span style={{ fontSize: 13, color: '#475569' }}>Lo usaremos para enviarte el resumen y recuperar tu reserva.</span>
+      </div>
       {guests.map((guest, i) => (
         <div key={i} style={{ background: '#f1f5f9', borderRadius: 8, padding: 14, marginBottom: 6 }}>
           <div style={{ fontWeight: 600, marginBottom: 4 }}>Huésped {i + 1} <span style={{ color: '#2563EB', fontWeight: 500, fontSize: 13, marginLeft: 8 }}>{room.guestsCount && i < room.guestsCount.adults ? 'Adulto' : (room.guestsCount && i < room.guestsCount.adults + room.guestsCount.children ? 'Niño' : 'Bebé')}</span></div>

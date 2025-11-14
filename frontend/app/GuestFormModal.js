@@ -8,6 +8,8 @@ const CAPACITY = {
   Suite: { adults: 3, children: 2, babies: 1 },
 };
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000").replace(/\/$/, "");
 
@@ -81,6 +83,8 @@ export default function GuestFormModal({ hotel, room, checkin, checkout, onClose
   const [errors, setErrors] = useState([]);
   const [loading, setLoading] = useState(false);
   const [confirmation, setConfirmation] = useState(null);
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactEmailError, setContactEmailError] = useState("");
 
   const capacity = useMemo(() => CAPACITY[room?.type] || CAPACITY.Single, [room?.type]);
   const totalCapacity = capacity.adults + capacity.children + capacity.babies;
@@ -216,7 +220,15 @@ export default function GuestFormModal({ hotel, room, checkin, checkout, onClose
       validationErrors.push("No se pueden registrar más huéspedes que la capacidad total de la habitación.");
     }
 
-    return { validationErrors, counts };
+    let emailError = "";
+    const trimmedEmail = contactEmail.trim();
+    if (!trimmedEmail) {
+      emailError = "El correo de contacto es obligatorio.";
+    } else if (!EMAIL_REGEX.test(trimmedEmail)) {
+      emailError = "El correo de contacto debe tener un formato valido.";
+    }
+
+    return { validationErrors, counts, emailError };
   };
 
   const handleChange = (idx, field, value) => {
@@ -240,9 +252,10 @@ export default function GuestFormModal({ hotel, room, checkin, checkout, onClose
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    const { validationErrors } = validate();
+    const { validationErrors, emailError } = validate();
     setErrors(validationErrors);
-    if (validationErrors.length > 0) return;
+    setContactEmailError(emailError);
+    if (validationErrors.length > 0 || emailError) return;
 
     setLoading(true);
     setConfirmation(null);
@@ -261,6 +274,7 @@ export default function GuestFormModal({ hotel, room, checkin, checkout, onClose
           checkin,
           checkout,
           guests: payloadGuests,
+          contact_email: contactEmail.trim(),
         }),
       });
       const data = await response.json();
@@ -333,6 +347,33 @@ export default function GuestFormModal({ hotel, room, checkin, checkout, onClose
 
   return (
     <form onSubmit={handleSubmit} style={{ marginTop: 12 }}>
+      <div style={{ marginBottom: 16, display: "flex", flexDirection: "column", gap: 6 }}>
+        <label htmlFor="contact-email" style={{ fontWeight: 500, fontSize: 15 }}>
+          Correo de contacto
+        </label>
+        <input
+          id="contact-email"
+          type="email"
+          value={contactEmail}
+          onChange={(event) => {
+            setContactEmail(event.target.value);
+            if (contactEmailError) {
+              setContactEmailError("");
+            }
+          }}
+          placeholder="ejemplo@correo.com"
+          style={{ borderRadius: 8, border: contactEmailError ? "2px solid #DC2626" : "1px solid #ccc", padding: 10 }}
+          required
+        />
+        <div style={{ fontSize: 13, color: "#475569" }}>
+          Utilizaremos este correo para enviarte el resumen o recuperar la reserva.
+        </div>
+        {contactEmailError && (
+          <div style={{ color: "#DC2626", fontSize: 13 }} aria-live="polite">
+            {contactEmailError}
+          </div>
+        )}
+      </div>
       <div style={{ fontWeight: 500, fontSize: 17, marginBottom: 10 }}>Datos de los huéspedes</div>
       {guests.map((guest, index) => {
         const info = getGuestInfo(guest);
