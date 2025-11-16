@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import GuestFormModal from "./GuestFormModal";
 import ReceptionPanel from "./ReceptionPanel";
 import ReservationSummaryCard from "./ReservationSummaryCard";
+import PaymentModal from "./PaymentModal";
 
 const CITIES = ["Buenos Aires", "Mar del Plata"];
 
@@ -176,6 +177,8 @@ export default function Home() {
   const [lookupFeedback, setLookupFeedback] = useState({ type: "", text: "" });
   const [lookupLoading, setLookupLoading] = useState(false);
   const summaryRef = useRef(null);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [paymentReservation, setPaymentReservation] = useState(null);
 
   useEffect(() => {
     if (activeReservation && summaryRef.current) {
@@ -516,9 +519,8 @@ export default function Home() {
     setLookupLoading(false);
   };
 
-  const handleLookupAction = useCallback((actionKey) => {
+  const handleInfoAction = useCallback((actionKey) => {
     const actionMessages = {
-      pay: "El pago online estara disponible en la proxima iteracion.",
       modify: "La modificacion de reserva estara habilitada pronto.",
       cancel: "La cancelacion online estara disponible en la HU correspondiente.",
       checkout: "El check-out desde la app estara disponible para ocupaciones altas.",
@@ -529,14 +531,37 @@ export default function Home() {
     });
   }, []);
 
+  const handlePayRequest = useCallback(
+    (reservation) => {
+      if (!reservation) return;
+      setPaymentReservation(reservation);
+      setPaymentModalOpen(true);
+      setLookupFeedback({ type: "", text: "" });
+    },
+    []
+  );
+
+  const handlePaymentSuccess = useCallback(
+    (data) => {
+      if (data?.reservation) {
+        persistActiveReservation(
+          data.reservation,
+          "Pago realizado con exito. Tu reserva quedo confirmada."
+        );
+        setPaymentReservation(data.reservation);
+      }
+    },
+    [persistActiveReservation]
+  );
+
   const reservationActions = useMemo(
     () => ({
-      pay: () => handleLookupAction("pay"),
-      modify: () => handleLookupAction("modify"),
-      cancel: () => handleLookupAction("cancel"),
-      checkout: () => handleLookupAction("checkout"),
+      pay: handlePayRequest,
+      modify: () => handleInfoAction("modify"),
+      cancel: () => handleInfoAction("cancel"),
+      checkout: () => handleInfoAction("checkout"),
     }),
-    [handleLookupAction]
+    [handlePayRequest, handleInfoAction]
   );
 
   return (
@@ -952,7 +977,7 @@ export default function Home() {
                 adjustRoomPrices(reservation.price_detail, true);
                 persistActiveReservation(
                   reservation,
-                  "Reserva confirmada. Revisa el resumen para continuar con el pago o gestionar cambios."
+                  "Reserva registrada. Revisa el resumen para continuar con el pago o gestionar cambios."
                 );
               }}
               onPricePreview={handlePricePreview}
@@ -976,6 +1001,16 @@ export default function Home() {
           </div>
         </div>
       )}
+      <PaymentModal
+        open={paymentModalOpen}
+        reservation={paymentReservation}
+        onClose={() => {
+          setPaymentModalOpen(false);
+          setPaymentReservation(null);
+        }}
+        onSuccess={handlePaymentSuccess}
+        currencyFormatter={formatCurrency}
+      />
     </div>
   );
 }

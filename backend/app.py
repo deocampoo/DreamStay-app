@@ -89,6 +89,9 @@ hotels = [
 CITY_REGEX = re.compile(r"^[0-9A-Za-z\u00c0-\u00ff ]+$")
 NAME_REGEX = re.compile(r"^[A-Za-z\u00c0-\u00ff ]+$")
 EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+CARD_REGEX = re.compile(r"^[0-9]{13,19}$")
+CVV_REGEX = re.compile(r"^[0-9]{3,4}$")
+EXP_REGEX = re.compile(r"^(0[1-9]|1[0-2])\/([0-9]{2})$")
 
 
 def is_valid_city(city: str) -> bool:
@@ -101,6 +104,25 @@ def is_valid_name(name: str) -> bool:
 
 def is_valid_email(value: str) -> bool:
     return bool(EMAIL_REGEX.fullmatch(value or ""))
+
+
+def normalize_email(value: str) -> str:
+    return str(value or "").strip().lower()
+
+
+def is_valid_expiration(value: str) -> bool:
+    match = EXP_REGEX.fullmatch(value or "")
+    if not match:
+        return False
+    month = int(match.group(1))
+    year_suffix = int(match.group(2))
+    year = 2000 + year_suffix
+    now = datetime.now()
+    if year < now.year:
+        return False
+    if year == now.year and month < now.month:
+        return False
+    return True
 
 
 def parse_date(date_str):
@@ -481,7 +503,7 @@ def make_reservation():
         "offers": applied_offers,
         "counts": counts_dict,
         "nights": nights,
-        "status": "confirmada",
+        "status": "pendiente_pago",
     }
 
     reservations.append(reservation)
@@ -522,6 +544,83 @@ def search_reservation():
 
     response_payload = reservation.copy()
     return jsonify({"reservation": response_payload})
+
+
+@app.route("/api/payments", methods=["POST", "OPTIONS"])
+def process_payment():
+    if request.method == "OPTIONS":
+        return "", 204
+
+    data = request.json or {}
+    code = str(data.get("confirmation_code", "")).strip().upper()
+    email = normalize_email(data.get("email", ""))
+    cardholder = str(data.get("cardholder", "")).strip()
+    card_number_raw = str(data.get("card_number", "")).replace(" ", "").replace("-", "")
+    expiration = str(data.get("expiration", "")).strip()
+    cvv = str(data.get("cvv", "")).strip()
+    receipt_email = normalize_email(data.get("receipt_email") or data.get("email") or "")
+
+    errors = []
+    if not code:
+        errors.append("El codigo de reserva es obligatorio.")
+    if not email or not is_valid_email(email):
+        errors.append("El correo asociado a la reserva es obligatorio y debe ser valido.")
+    if not cardholder or not is_valid_name(cardholder):
+        errors.append("El nombre del titular debe contener solo letras y espacios.")
+    if not CARD_REGEX.fullmatch(card_number_raw):
+        errors.append("El numero de tarjeta debe tener entre 13 y 19 digitos.")
+    if not is_valid_expiration(expiration):
+        errors.append("La fecha de vencimiento debe tener formato MM/AA y ser futura.")
+    if not CVV_REGEX.fullmatch(cvv):
+        errors.append("El codigo de seguridad (CVV) debe tener 3 o 4 digitos.")
+    if not receipt_email or not is_valid_email(receipt_email):
+        errors.append("El correo para el comprobante es obligatorio y debe ser valido.")
+
+    if errors:
+        return jsonify({"errors": errors}), 400
+
+    reservation = next(
+        (
+            res
+            for res in reservations
+            if res["confirmation_code"] == code
+            and normalize_email(res.get("contact_email")) == email
+        ),
+        None,
+    )
+
+    if not reservation or reservation.get("status") != "pendiente_pago":
+        return (
+            jsonify(
+                {"error": "No encontramos una reserva pendiente de pago con el codigo ingresado."}
+            ),
+            404,
+        )
+
+    amount = reservation.get("total")
+    last4 = card_number_raw[-4:]
+    paid_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    receipt = {
+        "confirmation_code": reservation["confirmation_code"],
+        "amount": amount,
+        "currency": "ARS",
+        "paid_at": paid_at,
+        "cardholder": cardholder,
+        "card_last4": last4,
+        "receipt_email": receipt_email,
+    }
+
+    reservation["status"] = "confirmada"
+    reservation["payment"] = receipt
+
+    return jsonify(
+        {
+            "message": "Pago realizado con exito. Tu reserva quedo confirmada.",
+            "reservation": reservation,
+            "receipt": receipt,
+        }
+    )
 
 
 @app.route("/api/price-preview", methods=["POST", "OPTIONS"])
