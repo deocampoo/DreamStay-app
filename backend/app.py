@@ -153,12 +153,14 @@ def dates_overlap(start1, end1, start2, end2):
     return start1 < end2 and start2 < end1
 
 
-def is_room_available(hotel_name, room_type, start, end):
+def is_room_available(hotel_name, room_type, start, end, ignore_code=None):
     key = (hotel_name, room_type)
     if room_status.get(key) == "Ocupada":
         return False
     for reservation in reservations:
         if reservation["hotel"] != hotel_name or reservation["room_type"] != room_type:
+            continue
+        if ignore_code and reservation["confirmation_code"] == ignore_code:
             continue
         if reservation.get("status") in ("confirmada", "ocupada"):
             res_start = parse_date(reservation["checkin"])
@@ -546,6 +548,68 @@ def search_reservation():
     return jsonify({"reservation": response_payload})
 
 
+@app.route("/api/reservations/cancel", methods=["POST", "OPTIONS"])
+def cancel_reservation():
+    if request.method == "OPTIONS":
+        return "", 204
+
+    data = request.json or {}
+    code = str(data.get("confirmation_code", "")).strip().upper()
+    email = normalize_email(data.get("email", ""))
+
+    if not code or not email:
+        return jsonify({"error": "Debe proporcionar codigo de reserva y correo de contacto."}), 400
+
+    reservation = next(
+        (
+            res
+            for res in reservations
+            if res["confirmation_code"] == code
+            and normalize_email(res.get("contact_email")) == email
+        ),
+        None,
+    )
+
+    if not reservation or reservation.get("status") != "confirmada":
+        return (
+            jsonify({"error": "No encontramos una reserva confirmada con los datos ingresados."}),
+            404,
+        )
+
+    refund_amount = 0.0
+    policy = "sin reembolso"
+    checkin = parse_date(reservation.get("checkin"))
+    now = datetime.now()
+    if checkin:
+        checkin_dt = datetime.combine(checkin, datetime.min.time())
+        if checkin_dt - now >= timedelta(hours=24):
+            refund_amount = reservation.get("total", 0.0)
+            policy = "reembolso total"
+
+    reservation["status"] = "cancelada"
+    reservation["cancellation"] = {
+        "refunded": refund_amount,
+        "policy": policy,
+        "cancelled_at": now.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+    key = (reservation["hotel"], reservation["room_type"])
+    room_status[key] = "Disponible"
+
+    message = (
+        "Reserva cancelada con exito. Se emitio "
+        + ("un reembolso total." if refund_amount else "la cancelacion sin reembolso.")
+    )
+
+    return jsonify(
+        {
+            "message": message,
+            "reservation": reservation,
+            "refund": {"amount": refund_amount, "policy": policy},
+        }
+    )
+
+
 @app.route("/api/payments", methods=["POST", "OPTIONS"])
 def process_payment():
     if request.method == "OPTIONS":
@@ -621,6 +685,138 @@ def process_payment():
             "receipt": receipt,
         }
     )
+
+
+@app.route("/api/reservations/modify", methods=["POST", "OPTIONS"])
+def modify_reservation():
+    if request.method == "OPTIONS":
+        return "", 204
+
+    data = request.json or {}
+    preview_only = bool(data.get("preview_only"))
+    code = str(data.get("confirmation_code", "")).strip().upper()
+    email = normalize_email(data.get("email", ""))
+    if not code or not email:
+        return jsonify({"error": "Debe proporcionar codigo y correo para modificar la reserva."}), 400
+
+    reservation = next(
+        (
+            res
+            for res in reservations
+            if res["confirmation_code"] == code
+            and normalize_email(res.get("contact_email")) == email
+        ),
+        None,
+    )
+
+    if not reservation or reservation.get("status") != "confirmada":
+        return (
+            jsonify({"error": "No encontramos una reserva confirmada con los datos ingresados."}),
+            404,
+        )
+
+    original_checkin = parse_date(reservation.get("checkin"))
+    if not original_checkin:
+        return jsonify({"error": "La reserva no tiene fechas validas para modificar."}), 400
+    if datetime.combine(original_checkin, datetime.min.time()) - datetime.now() < timedelta(hours=24):
+        return (
+            jsonify({"error": "No es posible modificar la reserva dentro de las 24 horas previas al check-in."}),
+            400,
+        )
+
+    new_checkin = parse_date(data.get("checkin") or reservation.get("checkin"))
+    new_checkout = parse_date(data.get("checkout") or reservation.get("checkout"))
+    if not new_checkin or not new_checkout or new_checkout <= new_checkin:
+        return jsonify({"error": "Fechas invalidas para la modificacion."}), 400
+
+    hotel_name = reservation["hotel"]
+    new_room_type = data.get("room_type") or reservation["room_type"]
+    hotel, room = get_room(hotel_name, new_room_type)
+    if not hotel or not room:
+        return jsonify({"error": "Tipo de habitacion invalido para el hotel seleccionado."}), 400
+
+    counts_payload = data.get("counts") or reservation.get("counts") or {}
+    try:
+        adult_count = int(counts_payload.get("adult", reservation["counts"].get("adult", 1)))
+        child_count = int(counts_payload.get("child", reservation["counts"].get("child", 0)))
+        baby_count = int(counts_payload.get("baby", reservation["counts"].get("baby", 0)))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Los conteos de huespedes deben ser numeros enteros."}), 400
+
+    if adult_count < 1 or child_count < 0 or baby_count < 0:
+        return jsonify({"error": "Debe haber al menos un adulto y los conteos no pueden ser negativos."}), 400
+
+    capacity = room["capacity"]
+    if (
+        adult_count > capacity["adults"]
+        or child_count > capacity["children"]
+        or baby_count > capacity["babies"]
+    ):
+        return jsonify({"error": "La cantidad de huespedes excede la capacidad de la habitacion seleccionada."}), 400
+
+    if not is_room_available(
+        hotel_name, new_room_type, new_checkin, new_checkout, ignore_code=reservation["confirmation_code"]
+    ):
+        return jsonify({"error": "No hay disponibilidad para los parametros seleccionados."}), 409
+
+    counts_dict = normalize_counts(adult_count, child_count, baby_count)
+    nights = max((new_checkout - new_checkin).days, 1)
+    offers = get_active_offers(hotel, new_checkin, new_checkout)
+    price_detail, applied_offers = calculate_price(room, counts_dict, nights, offers)
+    new_total = price_detail["total"]
+    current_total = reservation.get("total", 0)
+    difference = new_total - current_total
+    new_checkin_dt = datetime.combine(new_checkin, datetime.min.time())
+    more_than_24 = new_checkin_dt - datetime.now() >= timedelta(hours=24)
+
+    payment_action = "none"
+    refund_amount = 0.0
+    if difference > 0:
+        payment_action = "charge"
+    elif difference < 0 and more_than_24:
+        payment_action = "refund"
+        refund_amount = abs(difference)
+    elif difference < 0:
+        payment_action = "no_refund"
+
+    summary = {
+        "difference": difference,
+        "new_total": new_total,
+        "payment_action": payment_action,
+        "refund_amount": refund_amount,
+        "offers": applied_offers,
+        "nights": nights,
+        "price_detail": price_detail,
+    }
+
+    if preview_only:
+        return jsonify({"preview": summary})
+
+    reservation["room_type"] = new_room_type
+    reservation["room_name"] = room.get("name", new_room_type)
+    reservation["checkin"] = format_date_output(new_checkin)
+    reservation["checkout"] = format_date_output(new_checkout)
+    reservation["counts"] = counts_dict
+    reservation["nights"] = nights
+    reservation["price_detail"] = price_detail
+    reservation["total"] = new_total
+    reservation["offer"] = ", ".join(applied_offers) if applied_offers else None
+    reservation["modification"] = {
+        "modified_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "difference": difference,
+        "payment_action": payment_action,
+        "refund_amount": refund_amount,
+    }
+
+    message = "Reserva actualizada correctamente."
+    if payment_action == "charge":
+        message = f"La reserva fue actualizada. Debes abonar {difference:.2f} para completar los cambios."
+    elif payment_action == "refund":
+        message = f"La reserva fue actualizada. Se reintegraran {refund_amount:.2f}."
+    elif payment_action == "no_refund":
+        message = "La reserva fue actualizada sin reembolso por realizarse dentro de las 24 h."
+
+    return jsonify({"message": message, "reservation": reservation, "summary": summary})
 
 
 @app.route("/api/price-preview", methods=["POST", "OPTIONS"])

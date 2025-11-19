@@ -165,7 +165,7 @@ export default function PaymentModal({ open, reservation, onClose, onSuccess, cu
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.35)", zIndex: 1400, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div style={{ background: "#fff", borderRadius: 20, padding: 28, width: "min(560px, 100%)", maxHeight: "90vh", overflowY: "auto", position: "relative", boxShadow: "0 30px 80px rgba(15,23,42,0.25)" }}>
+      <div style={{ background: "#fff", borderRadius: 20, padding: 28, width: "min(560px, 100%)", maxHeight: "90vh", overflowY: "auto", position: "relative", boxShadow: "0 30px 80px rgba(15,23,42,0.25)", color: "#0f172a" }}>
         <button onClick={onClose} aria-label="Cerrar pago" style={{ position: "absolute", top: 16, right: 16, border: "none", background: "none", fontSize: 24, color: "#94a3b8", cursor: "pointer" }}>
           ×
         </button>

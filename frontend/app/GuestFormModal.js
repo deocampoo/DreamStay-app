@@ -213,7 +213,7 @@ export default function GuestFormModal({ hotel, room, checkin, checkout, onClose
     }
 
     if (counts.adult > capacity.adults || counts.child > capacity.children || counts.baby > capacity.babies) {
-      validationErrors.push("La cantidad de huéspedes excede la capacidad de la habitación seleccionada.");
+      validationErrors.push("La cantidad de huéspedes supera la capacidad de esta habitación.");
     }
 
     if (guests.length > totalCapacity) {
@@ -310,8 +310,8 @@ export default function GuestFormModal({ hotel, room, checkin, checkout, onClose
       return value ?? "0";
     };
     return (
-      <div>
-        <div style={{ fontWeight: 600, fontSize: 20, marginBottom: 12 }}>Reserva confirmada</div>
+      <div style={{ color: "#0f172a" }}>
+        <div style={{ fontWeight: 700, fontSize: 20, marginBottom: 12 }}>Reserva confirmada</div>
         <div><b>Código de confirmación:</b> {confirmation.confirmation_code}</div>
         <div><b>Hotel:</b> {confirmation.hotel}</div>
         <div><b>Habitación:</b> {confirmation.room_type}</div>
@@ -346,8 +346,8 @@ export default function GuestFormModal({ hotel, room, checkin, checkout, onClose
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ marginTop: 12 }}>
-      <div style={{ marginBottom: 16, display: "flex", flexDirection: "column", gap: 6 }}>
+    <form onSubmit={handleSubmit} style={{ marginTop: 12, color: "#0f172a" }}>
+      <div style={{ marginBottom: 16, display: "flex", flexDirection: "column", gap: 6, color: "#0f172a" }}>
         <label htmlFor="contact-email" style={{ fontWeight: 500, fontSize: 15 }}>
           Correo de contacto
         </label>
@@ -374,7 +374,7 @@ export default function GuestFormModal({ hotel, room, checkin, checkout, onClose
           </div>
         )}
       </div>
-      <div style={{ fontWeight: 500, fontSize: 17, marginBottom: 10 }}>Datos de los huéspedes</div>
+      <div style={{ fontWeight: 600, fontSize: 17, marginBottom: 10, color: "#0f172a" }}>Datos de los huéspedes</div>
       {guests.map((guest, index) => {
         const info = getGuestInfo(guest);
         return (

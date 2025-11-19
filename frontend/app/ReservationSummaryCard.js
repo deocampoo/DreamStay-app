@@ -90,7 +90,11 @@ export default function ReservationSummaryCard({ reservation, onAction = {}, cur
   const contactEmail = reservation.contact_email || reservation.email || "No informado";
   const distributionLabel = `Adultos ${counts.adult ?? 0} | Ninos ${counts.child ?? 0} | Bebes ${counts.baby ?? 0}`;
 
-  const actionKeys = statusInfo.actions || [];
+  const actionKeys = (statusInfo.actions || []).filter((key) => {
+    if (key === "modify" && reservation.allow_modify === false) return false;
+    if (key === "cancel" && reservation.allow_cancel === false) return false;
+    return true;
+  });
 
   const handleActionClick = (actionKey) => {
     const handler = onAction[actionKey];
@@ -143,7 +147,7 @@ export default function ReservationSummaryCard({ reservation, onAction = {}, cur
         }}
       >
         <div>
-          <div style={{ fontSize: 12, letterSpacing: 0.5, textTransform: "uppercase", color: "#94a3b8" }}>
+          <div style={{ fontSize: 12, letterSpacing: 0.5, textTransform: "uppercase", color: "#475569" }}>
             Resumen de reserva
           </div>
           <div style={{ fontSize: 24, fontWeight: 600, color: "#0f172a" }}>
@@ -167,8 +171,8 @@ export default function ReservationSummaryCard({ reservation, onAction = {}, cur
       </header>
 
       <div style={{ flex: 1, overflowY: "auto", paddingRight: 4, minHeight: 0 }}>
-        <div style={{ color: "#475569", fontSize: 15 }}>
-          <div style={{ fontWeight: 600, fontSize: 18, color: "#111827" }}>{reservation.hotel}</div>
+        <div style={{ color: "#0f172a", fontSize: 15 }}>
+          <div style={{ fontWeight: 600, fontSize: 18 }}>{reservation.hotel}</div>
           <div>Habitacion: <strong>{reservation.room_name || reservation.room_type}</strong></div>
           <div>
             Check-in <strong>{reservation.checkin || "-"}</strong> - Check-out{" "}
@@ -181,7 +185,7 @@ export default function ReservationSummaryCard({ reservation, onAction = {}, cur
           )}
         </div>
 
-        <p style={{ marginTop: 12, fontSize: 14, color: "#475569" }}>{statusInfo.description}</p>
+        <p style={{ marginTop: 12, fontSize: 14, color: "#334155" }}>{statusInfo.description}</p>
 
         <div
           style={{
@@ -199,7 +203,7 @@ export default function ReservationSummaryCard({ reservation, onAction = {}, cur
             "Subtotal por noche",
             formatMoney(detail.subtotal_per_night ?? detail.total ?? 0)
           )}
-          <div style={{ fontSize: 13, color: "#475569" }}>
+          <div style={{ fontSize: 13, color: "#334155" }}>
             <div style={{ fontWeight: 600, marginBottom: 4 }}>Detalle por categoria</div>
             <div>Adultos: {counts.adult ?? 0} x {formatMoney(perNight.adult ?? 0)}</div>
             <div>Ninos: {counts.child ?? 0} x {formatMoney(perNight.child ?? 0)}</div>
@@ -268,7 +272,7 @@ export default function ReservationSummaryCard({ reservation, onAction = {}, cur
             })}
           </div>
         ) : (
-          <div style={{ fontSize: 14, color: "#64748b" }}>
+          <div style={{ fontSize: 14, color: "#475569" }}>
             No hay acciones disponibles para el estado actual de la reserva.
           </div>
         )}
@@ -276,3 +280,4 @@ export default function ReservationSummaryCard({ reservation, onAction = {}, cur
     </section>
   );
 }
+
