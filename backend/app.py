@@ -42,8 +42,8 @@ hotels = [
         ],
         "offers": [
             {
-                "name": "Ni\u00f1os gratis temporada baja",
-                "description": "Ni\u00f1os gratis en temporada baja",
+                "name": "Niños gratis temporada baja",
+                "description": "Niños gratis en temporada baja",
                 "start": "01/05/2025",
                 "end": "31/08/2025",
                 "children_discount": 1.0,
@@ -76,8 +76,8 @@ hotels = [
         ],
         "offers": [
             {
-                "name": "Promo beb\u00e9s con cuna",
-                "description": "Beb\u00e9s con cuna sin cargo",
+                "name": "Promo bebés con cuna",
+                "description": "Bebés con cuna sin cargo",
                 "start": "01/03/2025",
                 "end": "31/12/2025",
                 "baby_discount": 1.0,
@@ -86,8 +86,8 @@ hotels = [
     },
 ]
 
-CITY_REGEX = re.compile(r"^[0-9A-Za-z\u00c0-\u00ff ]+$")
-NAME_REGEX = re.compile(r"^[A-Za-z\u00c0-\u00ff ]+$")
+CITY_REGEX = re.compile(r"^[0-9A-Za-zÀ-ÿ ]+$")
+NAME_REGEX = re.compile(r"^[A-Za-zÀ-ÿ ]+$")
 EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 CARD_REGEX = re.compile(r"^[0-9]{13,19}$")
 CVV_REGEX = re.compile(r"^[0-9]{3,4}$")
@@ -178,10 +178,10 @@ def format_capacity(capacity: dict) -> str:
     if adults:
         parts.append(f"{adults} adulto{'s' if adults != 1 else ''}")
     if children:
-        parts.append(f"{children} ni\u00f1o{'s' if children != 1 else ''}")
+        parts.append(f"{children} niño{'s' if children != 1 else ''}")
     if babies:
-        parts.append(f"{babies} beb\u00e9{'s' if babies != 1 else ''}")
-    return " + ".join(parts) if parts else "0 hu\u00e9spedes"
+        parts.append(f"{babies} bebé{'s' if babies != 1 else ''}")
+    return " + ".join(parts) if parts else "0 huéspedes"
 
 
 def normalize_counts(adults: int, children: int, babies: int) -> dict:
@@ -271,7 +271,7 @@ def search_hotels():
     if not city:
         errors.append("La ciudad es obligatoria.")
     elif not is_valid_city(city):
-        errors.append("La ciudad solo admite letras, n\u00fameros y espacios.")
+        errors.append("La ciudad solo admite letras, números y espacios.")
 
     checkin = data.get("checkin", "")
     checkout = data.get("checkout", "")
@@ -302,20 +302,20 @@ def search_hotels():
     room_type = data.get("room_type") or "Single"
     available_types = {room["type"] for hotel in hotels for room in hotel["rooms"]}
     if room_type != "Todos" and room_type not in available_types:
-        errors.append("Tipo de habitaci\u00f3n inv\u00e1lido.")
+        errors.append("Tipo de habitación inválido.")
 
     try:
         adults = int(data.get("adults", 1))
         children = int(data.get("children", 0))
         babies = int(data.get("babies", 0))
     except (TypeError, ValueError):
-        errors.append("La cantidad de hu\u00e9spedes debe ser un n\u00famero entero positivo.")
+        errors.append("La cantidad de huéspedes debe ser un número entero positivo.")
         adults, children, babies = 1, 0, 0
 
     if adults < 1:
         errors.append("Debe haber al menos un adulto en la reserva.")
     if children < 0 or babies < 0:
-        errors.append("No se permiten valores negativos en ni\u00f1os o beb\u00e9s.")
+        errors.append("No se permiten valores negativos en niños o bebés.")
 
     if room_type != "Todos" and room_type in available_types:
         selected_capacity = None
@@ -332,7 +332,7 @@ def search_hotels():
                 or children > selected_capacity["children"]
                 or babies > selected_capacity["babies"]
             ):
-                errors.append("La habitaci\u00f3n seleccionada no admite la cantidad de hu\u00e9spedes indicada.")
+                errors.append("La habitación seleccionada no admite la cantidad de huéspedes indicada.")
 
     if errors:
         return jsonify({"errors": errors}), 400
@@ -397,6 +397,59 @@ def search_hotels():
     return jsonify(results)
 
 
+# 🔹 NUEVA RUTA para que el frontend pueda listar habitaciones de un hotel
+@app.route("/api/hotels/<hotel_name>/rooms", methods=["GET"])
+def get_hotel_rooms(hotel_name):
+    """
+    Devuelve la lista de habitaciones de un hotel concreto.
+    Opcionalmente, si se pasan checkin/checkout, marca disponibilidad.
+    """
+    checkin_str = request.args.get("checkin")
+    checkout_str = request.args.get("checkout")
+
+    d_checkin = parse_date(checkin_str) if checkin_str else None
+    d_checkout = parse_date(checkout_str) if checkout_str else None
+
+    # Buscar hotel por nombre (case-insensitive)
+    hotel = next(
+        (h for h in hotels if h["name"].lower() == hotel_name.lower()),
+        None,
+    )
+
+    if not hotel:
+        return jsonify({"error": "Hotel no encontrado"}), 404
+
+    rooms_list = []
+    for room in hotel["rooms"]:
+        # Si hay fechas, calculamos disponibilidad real; si no, asumimos disponible
+        available = True
+        if d_checkin and d_checkout:
+            available = is_room_available(
+                hotel["name"],
+                room["type"],
+                d_checkin,
+                d_checkout,
+            )
+
+        estado = "disponible" if available else "ocupada"
+
+        # Usamos la tarifa de adulto como precio por noche de referencia
+        rates = room.get("rates", {})
+        precio_por_noche = float(rates.get("adult", room.get("price", 0.0)))
+
+        rooms_list.append(
+            {
+                "nombre": room.get("name", room["type"]),
+                "tipo": room["type"],
+                "capacidad": room["capacity"],  # {adults, children, babies}
+                "precio_por_noche": round(precio_por_noche, 2),
+                "estado": estado,
+            }
+        )
+
+    return jsonify(rooms_list)
+
+
 @app.route("/api/reservations", methods=["POST", "OPTIONS"])
 def make_reservation():
     if request.method == "OPTIONS":
@@ -417,16 +470,16 @@ def make_reservation():
     room_type = data["room_type"]
     hotel, room = get_room(hotel_name, room_type)
     if not hotel or not room:
-        return jsonify({"error": "Hotel o tipo de habitaci\u00f3n inv\u00e1lido"}), 400
+        return jsonify({"error": "Hotel o tipo de habitación inválido"}), 400
 
     d_checkin = parse_date(data["checkin"])
     d_checkout = parse_date(data["checkout"])
     if not d_checkin or not d_checkout or d_checkout <= d_checkin:
-        return jsonify({"error": "Fechas inv\u00e1lidas"}), 400
+        return jsonify({"error": "Fechas inválidas"}), 400
 
     guests = data.get("guests", [])
     if not isinstance(guests, list) or not guests:
-        return jsonify({"error": "Debe haber al menos un hu\u00e9sped"}), 400
+        return jsonify({"error": "Debe haber al menos un huésped"}), 400
 
     counts = Counter()
     processed_guests = []
@@ -437,19 +490,19 @@ def make_reservation():
         birth_raw = str(guest.get("birth", "")).strip()
 
         if not name:
-            return jsonify({"error": f"El nombre del hu\u00e9sped {idx} es obligatorio"}), 400
+            return jsonify({"error": f"El nombre del huésped {idx} es obligatorio"}), 400
         if not is_valid_name(name):
-            return jsonify({"error": f"El nombre del hu\u00e9sped {idx} solo admite letras y espacios"}), 400
+            return jsonify({"error": f"El nombre del huésped {idx} solo admite letras y espacios"}), 400
 
         birth_date = parse_date(birth_raw)
         if not birth_date:
-            return jsonify({"error": f"La fecha de nacimiento del hu\u00e9sped {idx} debe tener formato dd/mm/yyyy"}), 400
+            return jsonify({"error": f"La fecha de nacimiento del huésped {idx} debe tener formato dd/mm/yyyy"}), 400
 
         age = today.year - birth_date.year - (
             (today.month, today.day) < (birth_date.month, birth_date.day)
         )
         if age < 0:
-            return jsonify({"error": f"La fecha de nacimiento del hu\u00e9sped {idx} no puede ser futura"}), 400
+            return jsonify({"error": f"La fecha de nacimiento del huésped {idx} no puede ser futura"}), 400
 
         if age >= 18:
             category = "adult"
@@ -479,10 +532,10 @@ def make_reservation():
         or counts_dict["child"] > capacity["children"]
         or counts_dict["baby"] > capacity["babies"]
     ):
-        return jsonify({"error": "La cantidad de hu\u00e9spedes excede la capacidad de la habitaci\u00f3n seleccionada"}), 400
+        return jsonify({"error": "La cantidad de huéspedes excede la capacidad de la habitación seleccionada"}), 400
 
     if not is_room_available(hotel_name, room_type, d_checkin, d_checkout):
-        return jsonify({"error": "La habitaci\u00f3n seleccionada no tiene disponibilidad para esas fechas"}), 400
+        return jsonify({"error": "La habitación seleccionada no tiene disponibilidad para esas fechas"}), 400
 
     nights = max((d_checkout - d_checkin).days, 1)
     hotel_active_offers = get_active_offers(hotel, d_checkin, d_checkout)
@@ -881,7 +934,7 @@ def checkin():
     data = request.json or {}
     code = str(data.get("confirmation_code", "")).strip().upper()
     if not code:
-        return jsonify({"error": "Debe proporcionar el c\u00f3digo de confirmaci\u00f3n"}), 400
+        return jsonify({"error": "Debe proporcionar el código de confirmación"}), 400
 
     reservation = next((r for r in reservations if r["confirmation_code"] == code), None)
     if not reservation or reservation["status"] != "confirmada":
@@ -893,7 +946,7 @@ def checkin():
 
     key = (reservation["hotel"], reservation["room_type"])
     if room_status.get(key) == "Ocupada":
-        return jsonify({"error": "La habitaci\u00f3n ya est\u00e1 ocupada"}), 400
+        return jsonify({"error": "La habitación ya está ocupada"}), 400
 
     room_status[key] = "Ocupada"
     reservation["status"] = "ocupada"
@@ -917,11 +970,11 @@ def checkout():
     data = request.json or {}
     code = str(data.get("confirmation_code", "")).strip().upper()
     if not code:
-        return jsonify({"error": "Debe proporcionar el c\u00f3digo de confirmaci\u00f3n"}), 400
+        return jsonify({"error": "Debe proporcionar el código de confirmación"}), 400
 
     reservation = next((r for r in reservations if r["confirmation_code"] == code), None)
     if not reservation or reservation.get("status") != "ocupada":
-        return jsonify({"error": "La habitaci\u00f3n no se encuentra ocupada, no se puede realizar el check-out"}), 400
+        return jsonify({"error": "La habitación no se encuentra ocupada, no se puede realizar el check-out"}), 400
 
     checkout_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     reservation["status"] = "completada"
