@@ -10,8 +10,11 @@ export default function HotelRoomsList({ hotelName, checkin, checkout, open, onC
     setLoading(true);
     setError("");
     fetch(
-      `http://localhost:5000/api/hotels/${encodeURIComponent(hotelName)}/rooms?checkin=${checkin || ""}&checkout=${checkout || ""}`
+      `${API_BASE_URL}/api/hotels/${encodeURIComponent(
+        hotelName
+      )}/rooms?checkin=${checkin || ""}&checkout=${checkout || ""}`
     )
+
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data)) setRooms(data);

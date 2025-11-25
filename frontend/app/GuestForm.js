@@ -94,7 +94,7 @@ export default function GuestForm({ open, onClose, room }) {
     setLoading(true);
     setConfirmation(null);
     try {
-      const res = await fetch("http://localhost:5000/api/reservations", {
+      const res = await fetch(`${API_BASE_URL}/api/reservations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
