@@ -14,7 +14,15 @@ const CAPACITY = {
   Suite: { adults: 3, children: 2, babies: 1 },
 };
 
-const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000").replace(/\/$/, "");
+const DEFAULT_API_BASE_URL =
+  process.env.NODE_ENV === "development"
+    ? "http://localhost:5000"
+    : "https://dreamstay-app.onrender.com";
+const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  DEFAULT_API_BASE_URL
+).replace(/\/$/, "");
 
 function toInputDate(value) {
   if (!value) return "";

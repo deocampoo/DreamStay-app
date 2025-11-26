@@ -11,7 +11,15 @@ const CAPACITY = {
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 
-const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000").replace(/\/$/, "");
+const DEFAULT_API_BASE_URL =
+  process.env.NODE_ENV === "development"
+    ? "http://localhost:5000"
+    : "https://dreamstay-app.onrender.com";
+const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  DEFAULT_API_BASE_URL
+).replace(/\/$/, "");
 
 function parseBirth(value) {
   if (!value) return null;

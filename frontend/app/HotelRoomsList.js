@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from "react";
 
 // Igual lógica: local → localhost, producción → Render
-const API_BASE_URL =
+const DEFAULT_API_BASE_URL =
   process.env.NODE_ENV === "development"
     ? "http://localhost:5000"
     : "https://dreamstay-app.onrender.com";
+const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  DEFAULT_API_BASE_URL
+).replace(/\/$/, "");
 
 export default function HotelRoomsList({
   hotelName,

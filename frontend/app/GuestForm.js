@@ -5,10 +5,15 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // 👉 Base URL del backend:
 // - En desarrollo: localhost:5000
 // - En producción (Vercel): backend en Render
-const API_BASE_URL =
+const DEFAULT_API_BASE_URL =
   process.env.NODE_ENV === "development"
     ? "http://localhost:5000"
     : "https://dreamstay-app.onrender.com";
+const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  DEFAULT_API_BASE_URL
+).replace(/\/$/, "");
 
 export default function GuestForm({ open, onClose, room }) {
   const [guests, setGuests] = useState([]);

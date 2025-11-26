@@ -8,7 +8,15 @@ const CVV_REGEX = /^[0-9]{3,4}$/;
 const EXP_REGEX = /^(0[1-9]|1[0-2])\/([0-9]{2})$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000").replace(/\/$/, "");
+const DEFAULT_API_BASE_URL =
+  process.env.NODE_ENV === "development"
+    ? "http://localhost:5000"
+    : "https://dreamstay-app.onrender.com";
+const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  DEFAULT_API_BASE_URL
+).replace(/\/$/, "");
 
 function formatCurrencySafe(value, formatter) {
   if (typeof formatter === "function") return formatter(value);
